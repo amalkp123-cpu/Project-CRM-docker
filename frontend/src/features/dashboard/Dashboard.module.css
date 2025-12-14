@@ -1,0 +1,21 @@
+.dashboard {
+  border-radius: 0.7rem;
+  margin: 0.8rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.dashSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dashCard {
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+  padding: 1rem;
+  height: 100%;
+  border-radius: 0.5rem;
+}

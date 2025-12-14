@@ -1,0 +1,54 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid #ddd;
+  padding: 0.8rem 1.2rem;
+  text-align: left;
+  font-size: 0.85rem;
+}
+.table th {
+  background-color: #e7e7e7;
+  font-weight: 400;
+  font-size: 1rem;
+}
+
+.viewBtn {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.7rem;
+  border-radius: 0.4rem;
+
+  background-color: #333;
+  color: #fff;
+}
+
+.viewBtn:hover {
+  background-color: #555;
+}
+
+.statusCell span {
+  padding: 0.4rem 1rem;
+  font-size: 0.7rem;
+  border-radius: 0.8rem;
+  background-color: #ebebeb;
+  color: #555;
+  display: flex;
+  width: fit-content;
+}
+
+.filedon span {
+  background-color: #c8ffae;
+  color: #0e5606;
+}
+
+.readytofile span {
+  background-color: #e3d0ff;
+  color: #7409cc;
+}
+
+tbody tr:hover {
+  background-color: #fafafa;
+}

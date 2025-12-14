@@ -1,0 +1,30 @@
+.mainContainer {
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 2.5rem;
+  background-color: #f8f8f8;
+  color: #000;
+  height: fit-content;
+  min-height: 94%;
+  /* border: 1px solid #e0e0e0; */
+}
+
+.header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.backButton {
+  margin-top: 0.4rem;
+  cursor: pointer;
+}
+
+.formContainer {
+  margin-top: 2rem;
+}
