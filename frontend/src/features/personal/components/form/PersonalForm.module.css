@@ -86,6 +86,55 @@ input[aria-invalid="true"] {
   font-size: 0.8rem;
 }
 
+.formRow:has(.textAreaField) {
+  flex-direction: column;
+  gap: 0;
+}
+
+.formRow:has(.textAreaField) button {
+  align-self: flex-end;
+}
+
+.textAreaField {
+  max-width: 100%;
+}
+
+.textAreaField div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.textAreaField.textAreaField button {
+  min-width: 8rem;
+  background-color: #fff;
+  color: #b00020;
+  border: 1px solid #b0002044;
+  padding: 0.4rem 0.8rem;
+  align-self: center;
+}
+
+.textAreaField button:hover {
+  background-color: #b0002010;
+  border: 1px solid #b00020;
+}
+
+.notesArea {
+  height: 2rem;
+  resize: vertical;
+  padding: 0.3rem;
+  font-family: "inter", sans-serif;
+  width: 100%;
+  border-radius: 0.2rem;
+  border: 1px solid #ccc;
+}
+
+.notesArea[aria-invalid="true"] {
+  border-color: #b00020;
+  background: #ffecec;
+}
+
 .formActions {
   width: 100%;
   display: flex;
@@ -93,12 +142,13 @@ input[aria-invalid="true"] {
 }
 
 .formActions button {
-  font-size: 1rem;
-  background-color: #333;
+  font-size: 1.1rem;
+  background-color: #0e79ff;
   color: #fff;
   border: none;
   border-radius: 0.6rem;
   cursor: pointer;
+  padding: 1rem 1.4rem;
 }
 
 .removeRow {

@@ -12,6 +12,8 @@ const {
   deleteDependent,
   insertTaxRecord,
   deleteTaxRecord,
+  deleteNote,
+  insertNote,
 } = require("../controllers/pClient.Controller");
 
 const router = express.Router();
@@ -35,6 +37,10 @@ router.delete("/:id/dependents/:dependentId", deleteDependent);
 // TAX RECORDS
 router.post("/:id/tax-records", insertTaxRecord);
 router.delete("/:id/tax-records/:taxId", deleteTaxRecord);
+
+// Notes
+router.post("/:id/notes", insertNote);
+router.delete("/:id/notes/:noteId", deleteNote);
 
 // export router
 module.exports = router;

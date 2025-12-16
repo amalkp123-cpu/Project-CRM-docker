@@ -103,6 +103,10 @@
   border-radius: 1rem;
 }
 
+.noteBlock {
+  max-width: 100%;
+}
+
 .blockWithDelete:nth-child(3n + 1) {
   background: rgb(237, 243, 249);
 }
@@ -135,7 +139,19 @@
 }
 
 .tag {
+  background-color: #e0e7ff;
+  color: #3730a3;
+  padding: 0.2rem 0.6rem;
+  margin: 0 -0.3rem;
+  border-radius: 0.5rem;
+  width: fit-content;
   font-weight: 600;
+}
+
+.italicTag {
+  margin-top: 1rem;
+  font-style: italic;
+  color: #666666;
 }
 
 .headerButtons {

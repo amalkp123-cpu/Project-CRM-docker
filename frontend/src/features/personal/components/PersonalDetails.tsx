@@ -137,6 +137,29 @@ export default function PersonalDetails() {
     }
   };
 
+  // DELETE Notes
+  const handleDeleteNote = async (noteId: string) => {
+    if (!confirm("Delete this note?")) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/api/pClient/${id}/notes/${noteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to delete note");
+      }
+
+      alert("Note deleted successfully");
+      fetchClient(); // Refresh client data
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
   // DELETE TAX RECORD
   const handleDeleteTaxRecord = async (tax_id: any) => {
     if (!confirm(`Delete tax record for ${tax_id}?`)) return;
@@ -371,6 +394,39 @@ export default function PersonalDetails() {
               )}
             </div>
           )}
+
+          {/* NOTES WITH DELETE BUTTONS */}
+          {client.notes?.length !== 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Notes</h3>
+              </div>
+              <div className={styles.blockContainer}>
+                {client.notes.map((note: any) => (
+                  <div
+                    key={note.id}
+                    className={`${styles.blockWithDelete} ${styles.noteBlock}`}
+                  >
+                    <div className={styles.block}>
+                      <div>{note.note_text}</div>
+                      <div className={styles.italicTag}>
+                        -{note.created_by}
+                        <br />
+                        {formatDateIso(note.created_at)}
+                      </div>
+                    </div>
+                    <button
+                      className={styles.deleteItemBtn}
+                      onClick={() => handleDeleteNote(note.id)}
+                      title="Delete Note"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         {spouse && !hideSpouse && (
           <div className={styles.card}>
@@ -526,6 +582,35 @@ export default function PersonalDetails() {
                 )}
               </div>
             )}
+            {/* NOTES WITH DELETE BUTTONS */}
+            {spouse.notes?.length !== 0 && (
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <h3 className={styles.sectionTitle}>Notes</h3>
+                </div>
+                <div className={styles.blockContainer}>
+                  {spouse.notes.map((note: any) => (
+                    <div key={note.id} className={styles.blockWithDelete}>
+                      <div className={styles.block}>
+                        <div>{note.note_text}</div>
+                        <div className={styles.italicTag}>
+                          -{note.created_by}
+                          <br />
+                          {formatDateIso(note.created_at)}
+                        </div>
+                      </div>
+                      <button
+                        className={styles.deleteItemBtn}
+                        onClick={() => handleDeleteNote(note.id)}
+                        title="Delete Note"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -548,17 +633,16 @@ export default function PersonalDetails() {
                     {dep.first_name} {dep.last_name}
                   </div>
 
-                  <div>DOB: {new Date(dep.dob).toLocaleDateString()}</div>
+                  <Field
+                    label="DOB"
+                    value={new Date(dep.dob).toLocaleDateString()}
+                  />
 
                   {dep.disability && (
-                    <div>
-                      <div>Disability: Yes</div>
-                      <div>Notes: {dep.disability_notes}</div>
-                    </div>
-                  )}
-
-                  {dep.owner === "spouse" && (
-                    <div className={styles.subtle}>Linked to spouse</div>
+                    <Field
+                      label="Disability Notes"
+                      value={dep.disability_notes}
+                    />
                   )}
                 </div>
 

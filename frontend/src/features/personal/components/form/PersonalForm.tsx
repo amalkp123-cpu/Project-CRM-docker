@@ -27,6 +27,7 @@ export interface ClientForm {
   loyalty?: string;
   referredBy?: string;
   createdBy?: string;
+  notes?: string[];
   spouseFirstName?: string;
   spouseLastName?: string;
   spouseDob?: string;
@@ -111,7 +112,8 @@ export default function PersonalForm() {
       spouseSin: "",
       spousePhone: "",
       spouseEmail: "",
-      spouseGender: "", // new default
+      spouseGender: "",
+      notes: [],
       dependents: [],
       taxDetails: [],
       spouseTaxDetails: [],
@@ -217,13 +219,23 @@ export default function PersonalForm() {
       ));
   }
 
+  const [noteFields, setNoteFields] = useState<number[]>([0]);
+
+  const addNote = () => {
+    setNoteFields((prev) => [...prev, prev.length]);
+  };
+
+  const removeNote = (id: number) => {
+    setNoteFields((prev) => prev.filter((_, i) => i !== id));
+  };
+
   const taxList = (getValues().taxDetails || []) as TaxRecord[];
   const spouseTaxList = (getValues().spouseTaxDetails || []) as TaxRecord[];
 
   const onSubmit = async (data: any) => {
     try {
       const token = localStorage.getItem("token"); // Adjust based on your auth setup
-
+      console.log(data);
       const response = await fetch(`${API_URL}/api/pClient/`, {
         method: "POST",
         headers: {
@@ -474,7 +486,7 @@ export default function PersonalForm() {
             errors={errors}
           />
 
-          {/* Other Details and Tax Section unchanged (omitted for brevity) */}
+          {/* Other Details */}
           <section className={styles.formSection}>
             <h3>Other Details</h3>
             <div className={styles.formRow}>
@@ -526,6 +538,7 @@ export default function PersonalForm() {
             </div>
           </section>
 
+          {/* Tax Details */}
           <section className={styles.formSection}>
             <h3>Tax Section</h3>
             <div className={styles.addDependent}>
@@ -565,6 +578,40 @@ export default function PersonalForm() {
                   ))}
                 </div>
               )}
+            </div>
+          </section>
+
+          {/* Notes */}
+          <section className={styles.formSection}>
+            <h3>Notes</h3>
+            <div className={styles.formRow}>
+              <div className={`${styles.formField} ${styles.textAreaField}`}>
+                {noteFields.map((_, id) => (
+                  <div key={id}>
+                    <textarea
+                      id={`notes.${id}`}
+                      placeholder="Write your note here"
+                      className={styles.notesArea}
+                      inputMode="text"
+                      aria-invalid={!!errors.notes?.[id]}
+                      {...register(`notes.${id}`, {
+                        required: "Note cannot be empty",
+                      })}
+                    />
+                    {errors.notes?.[id] && (
+                      <div role="alert" className={styles.errorText}>
+                        {errors.notes[id].message}
+                      </div>
+                    )}
+                    <button type="button" onClick={() => removeNote(id)}>
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => addNote()}>
+                Add Notes
+              </button>
             </div>
           </section>
         </section>

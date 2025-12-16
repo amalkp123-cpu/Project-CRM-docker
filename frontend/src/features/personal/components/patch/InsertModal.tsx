@@ -4,6 +4,11 @@ import styles from "./InsertModal.module.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+interface Note {
+  note: string;
+  createdBy?: string;
+}
+
 interface Address {
   line1: string;
   line2?: string;
@@ -89,9 +94,15 @@ export default function InsertModal({
   user,
 }: InsertResourceModalProps) {
   const [activeTab, setActiveTab] = useState<
-    "address" | "dependent" | "tax" | "spouse"
-  >("address");
+    "notes" | "address" | "dependent" | "tax" | "spouse"
+  >("notes");
   const [loading, setLoading] = useState(false);
+
+  // Tax form state
+  const [noteForm, setNoteForm] = useState<Note>({
+    note: "",
+    createdBy: user?.id || "",
+  });
 
   // Address form state
   const [addressForm, setAddressForm] = useState<Address>({
@@ -147,6 +158,10 @@ export default function InsertModal({
   if (!visible) return null;
 
   const resetForms = () => {
+    setNoteForm({
+      note: "",
+      createdBy: user?.id || "",
+    });
     setAddressForm({
       line1: "",
       line2: "",
@@ -195,6 +210,41 @@ export default function InsertModal({
   const handleClose = () => {
     resetForms();
     onClose();
+  };
+
+  // ========== NOTE HANDLER ==========
+  const handleAddNote = async () => {
+    if (!noteForm.note) {
+      alert("A note are required");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/api/pClient/${clientId}/notes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(noteForm),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to add note");
+      }
+
+      alert("note added successfully!");
+      resetForms();
+      onSuccess();
+      handleClose();
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ========== ADDRESS HANDLER ==========
@@ -477,6 +527,13 @@ export default function InsertModal({
         {/* Tabs */}
         <div className={styles.tabs}>
           <button
+            className={activeTab === "notes" ? styles.activeTab : ""}
+            onClick={() => setActiveTab("notes")}
+            disabled={loading}
+          >
+            Notes
+          </button>
+          <button
             className={activeTab === "address" ? styles.activeTab : ""}
             onClick={() => setActiveTab("address")}
             disabled={loading}
@@ -509,6 +566,28 @@ export default function InsertModal({
         </div>
 
         <div className={styles.modalBody}>
+          {/* ========== Notes TAB ========== */}
+          {activeTab === "notes" && (
+            <div className={styles.tabContent}>
+              <h3>Add New Note</h3>
+
+              <div className={styles.formRow}>
+                <div className={`${styles.formField} ${styles.textAreaField}`}>
+                  <textarea
+                    id={`notes.`}
+                    placeholder="Write your note here"
+                    className={styles.notesArea}
+                    inputMode="text"
+                    value={noteForm.note}
+                    onChange={(e) =>
+                      setNoteForm({ ...noteForm, note: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ========== ADDRESS TAB ========== */}
           {activeTab === "address" && (
             <div className={styles.tabContent}>
@@ -1142,7 +1221,9 @@ export default function InsertModal({
           </button>
           <button
             onClick={
-              activeTab === "address"
+              activeTab === "notes"
+                ? handleAddNote
+                : activeTab === "address"
                 ? handleAddAddress
                 : activeTab === "dependent"
                 ? handleAddDependent

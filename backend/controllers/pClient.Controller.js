@@ -189,6 +189,20 @@ async function getClient(req, res) {
       );
       client.addresses = addrRes.rows;
 
+      const notesRes = await pool.query(
+        `SELECT 
+    nt.id AS id, 
+    nt.created_at AS created_at, 
+    nt.note_text AS note_text,
+    au.full_name AS created_by
+FROM notes nt
+LEFT JOIN app_users au ON nt.created_by = au.id
+WHERE nt.client_id = $1
+ORDER BY nt.created_at DESC`,
+        [clientId]
+      );
+      client.notes = notesRes.rows;
+
       // dependants
       const depRes = await pool.query(
         `SELECT id, first_name, last_name, dob, gender, relationship, disability, disability_notes, same_address, address_id
@@ -699,6 +713,26 @@ async function createPersonal(req, res) {
     const firstAddressId = insertedAddressIds.length
       ? insertedAddressIds[0]
       : null;
+
+    // 2) Insert addresses and collect inserted ids
+    const notes = Array.isArray(payload.notes) ? payload.notes : [];
+
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+
+      const notesSql = `
+        INSERT INTO notes
+          (client_id, note_text, created_by)
+        VALUES ($1,$2,$3)
+        RETURNING id
+      `;
+
+      console.log(note);
+
+      const notesVals = [clientId, note, createdById];
+
+      const r = await clientConn.query(notesSql, notesVals);
+    }
 
     // 3) Insert dependants. Return mapping tempId -> real id for frontend reconciliation.
     const dependants = Array.isArray(payload.dependents)
@@ -1369,6 +1403,83 @@ async function deleteAddress(req, res) {
   }
 }
 
+async function insertNote(req, res) {
+  const clientId = req.params.id;
+  const note = req.body.note;
+  const userId = req.user?.id;
+
+  const conn = await pool.connect();
+  try {
+    await conn.query("BEGIN");
+
+    // Verify client exists
+    const clientCheck = await conn.query(
+      "SELECT id FROM clients WHERE id = $1",
+      [clientId]
+    );
+    if (!clientCheck.rows.length) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({ error: "client_not_found" });
+    }
+
+    // Insert new address
+    const result = await conn.query(
+      `INSERT INTO notes 
+       (client_id, note_text, created_by)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [clientId, note, userId]
+    );
+
+    await conn.query("COMMIT");
+    return res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await conn.query("ROLLBACK");
+    console.error("insertNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
+async function deleteNote(req, res) {
+  const clientId = req.params.id;
+  const NoteId = req.params.noteId;
+
+  if (!NoteId) {
+    return res.status(400).json({ error: "note_id_required" });
+  }
+
+  try {
+    const result = await pool.query(
+      "DELETE FROM notes WHERE id = $1 AND client_id = $2 RETURNING id",
+      [NoteId, clientId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "note_not_found",
+        message: "note not found or does not belong to this client",
+      });
+    }
+
+    return res.json({
+      success: true,
+      id: NoteId,
+      message: "note deleted successfully",
+    });
+  } catch (err) {
+    console.error("deleteNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  }
+}
+
 async function insertDependent(req, res) {
   const clientId = req.params.id;
   const {
@@ -1666,4 +1777,6 @@ module.exports = {
   deleteDependent,
   insertTaxRecord,
   deleteTaxRecord,
+  insertNote,
+  deleteNote,
 };
