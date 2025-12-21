@@ -172,9 +172,9 @@
 }
 
 .deleteBtn {
-  background-color: #fff;
+  background-color: inherit;
   color: #c62828;
-  border-radius: 1rem;
+  /* border-radius: 1rem; */
   padding: 0.4rem 0.8rem;
 }
 
@@ -183,8 +183,26 @@
   color: #fff;
 }
 
+.buttonContainer {
+  align-self: flex-end;
+  display: flex;
+  gap: 0.2rem;
+}
+
+td:has(.buttonContainer) {
+  display: flex;
+}
+
+td .buttonContainer {
+  align-self: initial;
+}
+
+.buttonContainer button {
+  height: 100%;
+}
+
 .editBtn {
-  background-color: #fff;
+  background-color: inherit;
   color: #4a6fa5;
   padding: 0 0.8rem;
 }

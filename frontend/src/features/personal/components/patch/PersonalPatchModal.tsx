@@ -17,10 +17,29 @@ interface PatchForm {
   fax: string;
   loyalty: string;
   referredBy: string;
+  // Address fields
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  country: string;
 }
 
 function sanitizeDigits(s = "") {
   return String(s).replace(/\D/g, "");
+}
+
+// Add this function at the top, before the component
+function formatDateForInput(dateString: string | null | undefined): string {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatPhoneForDisplay(value = "") {
@@ -50,6 +69,13 @@ function validateCanadianSIN(sin = "") {
   return true;
 }
 
+function validateCanadianPostalCode(postal = "") {
+  const cleaned = postal.replace(/\s/g, "").toUpperCase();
+  const regex = /^[A-Z]\d[A-Z]\d[A-Z]\d$/;
+  if (!regex.test(cleaned)) return "Invalid postal code format (e.g., A1A 1A1)";
+  return true;
+}
+
 export default function PersonalPatchModal({
   visible,
   onClose,
@@ -75,20 +101,27 @@ export default function PersonalPatchModal({
   useEffect(() => {
     if (!visible || !client) return;
 
+    const firstAddress = client?.addresses?.[0];
+
     reset({
       firstName: client?.first_name ?? "",
       lastName: client?.last_name ?? "",
-      dob: client?.dob ? client.dob.split("T")[0] : "",
+      dob: formatDateForInput(client?.dob),
       gender: client?.gender ? client.gender : "",
       sin: client?.sin_original ?? "",
       phone: client?.phone ?? "",
       email: client?.email ?? "",
-      dateOfMarriage: client?.date_of_marriage
-        ? client.date_of_marriage.split("T")[0]
-        : "",
+      dateOfMarriage: formatDateForInput(client?.date_of_marriage),
       fax: client?.fax ?? "",
-      loyalty: client?.loyalty_since ? client.loyalty_since.split("T")[0] : "",
+      loyalty: formatDateForInput(client?.loyalty_since),
       referredBy: client?.referred_by ?? "",
+      // Address fields
+      addressLine1: firstAddress?.address_line1 ?? "",
+      addressLine2: firstAddress?.address_line2 ?? "",
+      city: firstAddress?.city ?? "",
+      province: firstAddress?.province ?? "",
+      postalCode: firstAddress?.postal_code ?? "",
+      country: firstAddress?.country ?? "",
     });
   }, [visible, client, reset]);
 
@@ -111,15 +144,38 @@ export default function PersonalPatchModal({
       fax: "fax",
       loyalty: "loyalty_since",
       referredBy: "referred_by",
+      addressLine1: "address_line1",
+      addressLine2: "address_line2",
+      city: "city",
+      province: "province",
+      postalCode: "postal_code",
+      country: "country",
     };
+
+    const firstAddress = client.addresses?.[0];
 
     for (const [formKey, apiKey] of Object.entries(fieldMapping)) {
       const newVal = data[formKey as keyof PatchForm];
-      let oldVal = client[apiKey];
+      let oldVal: any;
 
-      // Handle date formatting from API
+      // For address fields, get value from first address
+      if (
+        [
+          "address_line1",
+          "address_line2",
+          "city",
+          "province",
+          "postal_code",
+          "country",
+        ].includes(apiKey)
+      ) {
+        oldVal = firstAddress?.[apiKey];
+      } else {
+        oldVal = client[apiKey];
+      }
+
       if (oldVal && typeof oldVal === "string" && oldVal.includes("T")) {
-        oldVal = oldVal.split("T")[0];
+        oldVal = formatDateForInput(oldVal);
       }
 
       const normalizedNew = newVal === "" ? null : newVal;
@@ -394,6 +450,109 @@ export default function PersonalPatchModal({
                   {errors.fax && (
                     <div role="alert" className={styles.errorText}>
                       {errors.fax.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.formSection}>
+              <h2>Address</h2>
+
+              <div className={styles.formRow}>
+                <div className={styles.formField}>
+                  <label htmlFor="addressLine1">Address Line 1</label>
+                  <input
+                    id="addressLine1"
+                    {...register("addressLine1", {
+                      required: "Address is required",
+                    })}
+                    aria-invalid={!!errors.addressLine1}
+                    placeholder="123 Main St"
+                  />
+                  {errors.addressLine1 && (
+                    <div role="alert" className={styles.errorText}>
+                      {errors.addressLine1.message}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="addressLine2">Address Line 2</label>
+                  <input
+                    id="addressLine2"
+                    {...register("addressLine2")}
+                    placeholder="Apt 4B (optional)"
+                  />
+                </div>
+              </div>
+
+              <div className={styles.formRow}>
+                <div className={styles.formField}>
+                  <label htmlFor="city">City</label>
+                  <input
+                    id="city"
+                    {...register("city", {
+                      required: "City is required",
+                    })}
+                    aria-invalid={!!errors.city}
+                    placeholder="Toronto"
+                  />
+                  {errors.city && (
+                    <div role="alert" className={styles.errorText}>
+                      {errors.city.message}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="province">Province</label>
+                  <input
+                    id="province"
+                    {...register("province", {
+                      required: "Province is required",
+                    })}
+                    aria-invalid={!!errors.province}
+                    placeholder="ON"
+                  />
+                  {errors.province && (
+                    <div role="alert" className={styles.errorText}>
+                      {errors.province.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.formRow}>
+                <div className={styles.formField}>
+                  <label htmlFor="postalCode">Postal Code</label>
+                  <input
+                    id="postalCode"
+                    {...register("postalCode", {
+                      required: "Postal code is required",
+                      validate: validateCanadianPostalCode,
+                    })}
+                    aria-invalid={!!errors.postalCode}
+                    placeholder="A1A 1A1"
+                    maxLength={7}
+                  />
+                  {errors.postalCode && (
+                    <div role="alert" className={styles.errorText}>
+                      {errors.postalCode.message}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="country">Country</label>
+                  <input
+                    id="country"
+                    {...register("country", {
+                      required: "Country is required",
+                    })}
+                    aria-invalid={!!errors.country}
+                    placeholder="Canada"
+                  />
+                  {errors.country && (
+                    <div role="alert" className={styles.errorText}>
+                      {errors.country.message}
                     </div>
                   )}
                 </div>

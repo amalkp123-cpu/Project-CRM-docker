@@ -231,7 +231,38 @@ WHERE tr.client_id = $1
 ORDER BY tr.tax_year DESC`,
         [clientId]
       );
+
+      const hstRes = await pool.query(
+        `
+  SELECT
+    hst_docs.id,
+    tax_record_id,
+    filename,
+    uploaded_at,
+    uploaded_by as uploaded_by_id,
+    au.full_name AS uploaded_by_name
+  FROM hst_docs
+  LEFT JOIN app_users au ON hst_docs.uploaded_by = au.id
+  WHERE client_id = $1
+  ORDER BY uploaded_at DESC
+  `,
+        [clientId]
+      );
+
+      const hstByTaxRecord = {};
+
+      for (const doc of hstRes.rows) {
+        if (!hstByTaxRecord[doc.tax_record_id]) {
+          hstByTaxRecord[doc.tax_record_id] = [];
+        }
+        hstByTaxRecord[doc.tax_record_id].push(doc);
+      }
+
       client.tax_records = taxRes.rows;
+      client.tax_records = client.tax_records.map((tr) => ({
+        ...tr,
+        hst_docs: hstByTaxRecord[tr.id] || [],
+      }));
 
       // verifications
       const verRes = await pool.query(
@@ -727,8 +758,6 @@ async function createPersonal(req, res) {
         RETURNING id
       `;
 
-      console.log(note);
-
       const notesVals = [clientId, note, createdById];
 
       const r = await clientConn.query(notesSql, notesVals);
@@ -1013,11 +1042,15 @@ async function patchClient(req, res) {
     return undefined;
   }
 
+  function nullify(v) {
+    return v === "" ? null : v;
+  }
+
   try {
     await clientConn.query("BEGIN");
     const now = new Date();
 
-    // lock target client row
+    // lock client
     const checkRes = await clientConn.query(
       `SELECT id FROM clients WHERE id = $1 FOR UPDATE`,
       [clientId]
@@ -1027,7 +1060,10 @@ async function patchClient(req, res) {
       return res.status(404).json({ error: "client_not_found" });
     }
 
-    // ---------- Client updates ----------
+    // ======================
+    // CLIENT UPDATE
+    // ======================
+
     const fieldMapping = {
       firstName: "first_name",
       lastName: "last_name",
@@ -1043,255 +1079,126 @@ async function patchClient(req, res) {
 
     const cSetters = [];
     const cParams = [];
-    function cAddSetter(column, value) {
-      cSetters.push(`${column} = $${cParams.length + 1}`);
-      cParams.push(value);
+
+    function cAdd(col, val) {
+      cSetters.push(`${col} = $${cParams.length + 1}`);
+      cParams.push(val);
     }
 
     for (const [pKey, dbCol] of Object.entries(fieldMapping)) {
       const val = pick(payload, pKey, dbCol);
-      if (val !== undefined) cAddSetter(dbCol, nullify(val));
+      if (val !== undefined) cAdd(dbCol, nullify(val));
     }
 
-    // SIN handling for client. If payload has sin key, set encrypted/hash or explicit nulls.
     if (Object.prototype.hasOwnProperty.call(payload, "sin")) {
-      const sinRaw = pick(payload, "sin", "sin");
-      const sin = nullify(sinRaw);
+      const sin = nullify(payload.sin);
       if (sin) {
-        cAddSetter("sin_encrypted", encrypt(sin));
-        cAddSetter("sin_hash", sha256(sin));
+        cAdd("sin_encrypted", encrypt(sin));
+        cAdd("sin_hash", sha256(sin));
       } else {
-        // set explicit nulls so positional indices remain consistent
-        cAddSetter("sin_encrypted", null);
-        cAddSetter("sin_hash", null);
+        cAdd("sin_encrypted", null);
+        cAdd("sin_hash", null);
       }
     }
 
-    // ---------- Spouse presence detection ----------
-    const spouseFieldsPresent =
-      pick(payload, "spouseFirstName", "spouse_first_name") !== undefined ||
-      pick(payload, "spouseLastName", "spouse_last_name") !== undefined ||
-      Object.prototype.hasOwnProperty.call(payload, "spouseDob") ||
-      Object.prototype.hasOwnProperty.call(payload, "spouseGender") ||
-      Object.prototype.hasOwnProperty.call(payload, "spousePhone") ||
-      Object.prototype.hasOwnProperty.call(payload, "spouseEmail") ||
-      Object.prototype.hasOwnProperty.call(payload, "spouseSin") ||
-      Object.prototype.hasOwnProperty.call(payload, "date_of_marriage");
-
-    // If nothing to change at all, abort early
-    if (cSetters.length === 0 && !spouseFieldsPresent) {
-      await clientConn.query("ROLLBACK");
-      return res.status(400).json({ error: "no_changes_provided" });
-    }
-
-    // perform client update if needed
     if (cSetters.length > 0) {
-      // append updated_at
-      cAddSetter("updated_at", now);
-      // compute id placeholder and build SQL
-      const idPlaceholder = `$${cParams.length + 1}`;
-      const clientSql = `UPDATE clients SET ${cSetters.join(
-        ", "
-      )} WHERE id = ${idPlaceholder}`;
-      // final param array = [...fieldValues, clientId]
-      const clientParams = cParams.concat([clientId]);
-
-      const upd = await clientConn.query(clientSql, clientParams);
-      if (upd.rowCount === 0) {
-        await clientConn.query("ROLLBACK");
-        return res.status(409).json({
-          error: "client_not_updated",
-          debug: { sql: clientSql, params: clientParams },
-        });
-      }
+      cAdd("updated_at", now);
+      const idPos = `$${cParams.length + 1}`;
+      await clientConn.query(
+        `UPDATE clients SET ${cSetters.join(", ")} WHERE id = ${idPos}`,
+        cParams.concat(clientId)
+      );
     }
 
-    // ---------- Spouse handling ----------
-    // fetch existing spouse link
-    const linkRes = await clientConn.query(
-      `SELECT linked_client_id FROM spouse_links WHERE client_id = $1 LIMIT 1`,
-      [clientId]
+    // ======================
+    // ADDRESS UPDATE
+    // ======================
+
+    const addressFields = [
+      "address_line1",
+      "address_line2",
+      "city",
+      "province",
+      "postal_code",
+      "country",
+    ];
+
+    const addressPresent = addressFields.some((k) =>
+      Object.prototype.hasOwnProperty.call(payload, k)
     );
-    let linkedSpouseId = linkRes.rows[0]?.linked_client_id || null;
 
-    if (spouseFieldsPresent) {
-      const sFirst = pick(payload, "spouseFirstName", "spouse_first_name");
-      const sLast = pick(payload, "spouseLastName", "spouse_last_name");
-      const sDob = pick(payload, "spouseDob", "spouse_dob");
-      const sGender = pick(payload, "spouseGender", "spouse_gender");
-      const sPhone = pick(payload, "spousePhone", "spouse_phone");
-      const sEmail = pick(payload, "spouseEmail", "spouse_email");
-      const sSinRaw = pick(payload, "spouseSin", "spouse_sin");
+    if (addressPresent) {
+      const addrRes = await clientConn.query(
+        `SELECT id FROM addresses
+         WHERE client_id = $1
+         ORDER BY is_primary DESC, created_at ASC
+         LIMIT 1
+         FOR UPDATE`,
+        [clientId]
+      );
 
-      if (linkedSpouseId) {
-        // update spouse deterministically
-        const sSetters = [];
-        const sParams = [];
-        function sAddSetter(column, value) {
-          sSetters.push(`${column} = $${sParams.length + 1}`);
-          sParams.push(value);
+      const aSetters = [];
+      const aParams = [];
+
+      function aAdd(col, val) {
+        aSetters.push(`${col} = $${aParams.length + 1}`);
+        aParams.push(val);
+      }
+
+      for (const col of addressFields) {
+        if (Object.prototype.hasOwnProperty.call(payload, col)) {
+          aAdd(col, nullify(payload[col]));
         }
+      }
 
-        if (sFirst !== undefined) sAddSetter("first_name", nullify(sFirst));
-        if (sLast !== undefined) sAddSetter("last_name", nullify(sLast));
-        if (sDob !== undefined) sAddSetter("dob", nullify(sDob));
-        if (sGender !== undefined) sAddSetter("gender", nullify(sGender));
-        if (sPhone !== undefined) sAddSetter("phone", nullify(sPhone));
-        if (sEmail !== undefined) sAddSetter("email", nullify(sEmail));
-
-        if (Object.prototype.hasOwnProperty.call(payload, "spouseSin")) {
-          const sSin = nullify(sSinRaw);
-          if (sSin) {
-            sAddSetter("sin_encrypted", encrypt(sSin));
-            sAddSetter("sin_hash", sha256(sSin));
-          } else {
-            sAddSetter("sin_encrypted", null);
-            sAddSetter("sin_hash", null);
-          }
-        }
-
-        if (sSetters.length > 0) {
-          sAddSetter("updated_at", now);
-          // id placeholder will be $ (sParams.length + 1)
-          const idPlaceholder = `$${sParams.length + 1}`;
-          const sql = `UPDATE clients SET ${sSetters.join(
-            ", "
-          )} WHERE id = ${idPlaceholder}`;
-          const params = sParams.concat([linkedSpouseId]);
-
-          console.debug("spouse UPDATE SQL:", sql);
-          console.debug("spouse UPDATE params:", params);
-
-          const sUpd = await clientConn.query(sql, params);
-          if (sUpd.rowCount === 0) {
-            await clientConn.query("ROLLBACK");
-            return res.status(409).json({
-              error: "spouse_not_updated",
-              debug: { sql, params },
-            });
-          }
+      if (addrRes.rows.length) {
+        if (aSetters.length > 0) {
+          const idPos = `$${aParams.length + 1}`;
+          await clientConn.query(
+            `UPDATE addresses SET ${aSetters.join(", ")} WHERE id = ${idPos}`,
+            aParams.concat(addrRes.rows[0].id)
+          );
         }
       } else {
-        // create spouse record
-        const sSin = nullify(sSinRaw);
-        const sSinHash = sSin ? sha256(sSin) : null;
-        const insertSpouseSql = `
-          INSERT INTO clients
-            (first_name, last_name, dob, gender, phone, email, marital_status, sin_encrypted, sin_hash, created_by, created_at, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-          RETURNING id
-        `;
-        const insertVals = [
-          sFirst || null,
-          sLast || null,
-          sDob || null,
-          sGender || null,
-          sPhone || null,
-          sEmail || null,
-          pick(payload, "maritalStatus", "marital_status") || null,
-          sSin ? encrypt(sSin) : null,
-          sSinHash,
-          updatedBy,
-          now,
-          now,
-        ];
-
-        console.debug("insert spouse SQL:", insertSpouseSql);
-        console.debug("insert spouse params:", insertVals);
-
-        const sr = await clientConn.query(insertSpouseSql, insertVals);
-        const newSpouseId = sr.rows[0].id;
-
-        // insert spouse_links both ways, avoid duplicates
         await clientConn.query(
-          `INSERT INTO spouse_links (client_id, linked_client_id, date_of_marriage)
-           SELECT $1, $2, $3
-           WHERE NOT EXISTS (
-             SELECT 1 FROM spouse_links WHERE client_id = $1 AND linked_client_id = $2
-           )`,
+          `INSERT INTO addresses
+           (client_id, address_line1, address_line2, city, province, postal_code, country, is_primary)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,true)`,
           [
             clientId,
-            newSpouseId,
-            pick(payload, "dateOfMarriage", "date_of_marriage") || null,
+            payload.address_line1 || null,
+            payload.address_line2 || null,
+            payload.city || null,
+            payload.province || null,
+            payload.postal_code || null,
+            payload.country || null,
           ]
         );
-        await clientConn.query(
-          `INSERT INTO spouse_links (client_id, linked_client_id, date_of_marriage)
-           SELECT $1, $2, $3
-           WHERE NOT EXISTS (
-             SELECT 1 FROM spouse_links WHERE client_id = $1 AND linked_client_id = $2
-           )`,
-          [
-            newSpouseId,
-            clientId,
-            pick(payload, "dateOfMarriage", "date_of_marriage") || null,
-          ]
-        );
-
-        linkedSpouseId = newSpouseId;
       }
     }
 
-    if (
-      Object.prototype.hasOwnProperty.call(payload, "date_of_marriage") &&
-      linkedSpouseId
-    ) {
-      await clientConn.query(
-        `UPDATE spouse_links
-     SET date_of_marriage = $1
-     WHERE client_id = $2 AND linked_client_id = $3`,
-        [
-          pick(payload, "dateOfMarriage", "date_of_marriage") || null,
-          clientId,
-          linkedSpouseId,
-        ]
-      );
+    // ======================
+    // COMMIT
+    // ======================
 
-      // keep bidirectional link consistent
-      await clientConn.query(
-        `UPDATE spouse_links
-     SET date_of_marriage = $1
-     WHERE client_id = $2 AND linked_client_id = $3`,
-        [
-          pick(payload, "dateOfMarriage", "date_of_marriage") || null,
-          linkedSpouseId,
-          clientId,
-        ]
-      );
-    }
-
-    // commit transaction
     await clientConn.query("COMMIT");
 
-    // Fetch fresh client summary for response
     const { rows } = await pool.query(
-      `SELECT id, first_name, last_name, dob, gender, phone, email, fax, marital_status, loyalty_since, referred_by, sin_hash, updated_at
+      `SELECT id, first_name, last_name, dob, gender, phone, email, fax,
+              marital_status, loyalty_since, referred_by, updated_at
        FROM clients WHERE id = $1`,
       [clientId]
     );
-    const client = rows[0] || null;
-
-    if (linkedSpouseId) {
-      const sRes = await pool.query(
-        `SELECT id, first_name AS spouse_first_name, last_name AS spouse_last_name, phone AS spouse_phone, email AS spouse_email, dob AS spouse_dob, gender AS spouse_gender
-         FROM clients WHERE id = $1 LIMIT 1`,
-        [linkedSpouseId]
-      );
-      client.spouse = sRes.rows[0] || null;
-    }
 
     return res.json({
       success: true,
-      id: clientId,
       message: "Client updated successfully",
-      client,
+      client: rows[0],
     });
   } catch (err) {
     try {
       await clientConn.query("ROLLBACK");
-    } catch (e) {
-      console.error("rollback failed:", e);
-    }
+    } catch {}
     console.error("patchClient error:", err);
     return res.status(500).json({
       error: "server_error",
@@ -1762,6 +1669,195 @@ async function deleteTaxRecord(req, res) {
   }
 }
 
+// Add these controller functions to your backend
+
+async function patchTaxRecord(req, res) {
+  const { id: clientId, taxId } = req.params;
+  const payload = req.body || {};
+  const updatedBy = req.user?.id || null;
+
+  if (!updatedBy) return res.status(401).json({ error: "unauthenticated" });
+  if (!clientId || !taxId) return res.status(400).json({ error: "invalid_id" });
+
+  const conn = await pool.connect();
+
+  try {
+    await conn.query("BEGIN");
+
+    // Verify tax record belongs to client
+    const checkRes = await conn.query(
+      `SELECT id FROM tax_records WHERE id = $1 AND client_id = $2 FOR UPDATE`,
+      [taxId, clientId]
+    );
+
+    if (!checkRes.rows.length) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({ error: "tax_record_not_found" });
+    }
+
+    // Build update query
+    const setters = [];
+    const params = [];
+
+    function addSetter(column, value) {
+      setters.push(`${column} = $${params.length + 1}`);
+      params.push(value);
+    }
+
+    if (payload.tax_year !== undefined) addSetter("tax_year", payload.tax_year);
+    if (payload.tax_status !== undefined)
+      addSetter("tax_status", payload.tax_status);
+    if (payload.tax_date !== undefined) addSetter("tax_date", payload.tax_date);
+    if (payload.prepared_by !== undefined)
+      addSetter("prepared_by", payload.prepared_by);
+    if (payload.hst_required !== undefined)
+      addSetter("hst_required", payload.hst_required);
+
+    if (setters.length === 0) {
+      await conn.query("ROLLBACK");
+      return res.status(400).json({ error: "no_changes_provided" });
+    }
+
+    // Add updated_at
+    addSetter("last_updated", new Date());
+
+    // Execute update
+    const idPlaceholder = `$${params.length + 1}`;
+    const sql = `UPDATE tax_records SET ${setters.join(
+      ", "
+    )} WHERE id = ${idPlaceholder}`;
+    const finalParams = params.concat([taxId]);
+
+    const result = await conn.query(sql, finalParams);
+
+    if (result.rowCount === 0) {
+      await conn.query("ROLLBACK");
+      return res.status(409).json({ error: "tax_record_not_updated" });
+    }
+
+    await conn.query("COMMIT");
+
+    // Fetch updated record
+    const { rows } = await pool.query(
+      `SELECT * FROM tax_records WHERE id = $1`,
+      [taxId]
+    );
+
+    return res.json({
+      success: true,
+      message: "Tax record updated successfully",
+      taxRecord: rows[0],
+    });
+  } catch (err) {
+    try {
+      await conn.query("ROLLBACK");
+    } catch (e) {
+      console.error("rollback failed:", e);
+    }
+    console.error("patchTaxRecord error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
+async function patchDependent(req, res) {
+  const { id: clientId, dependentId } = req.params;
+  const payload = req.body || {};
+  const updatedBy = req.user?.id || null;
+
+  if (!updatedBy) return res.status(401).json({ error: "unauthenticated" });
+  if (!clientId || !dependentId)
+    return res.status(400).json({ error: "invalid_id" });
+
+  const conn = await pool.connect();
+
+  try {
+    await conn.query("BEGIN");
+
+    // Verify dependent belongs to client
+    const checkRes = await conn.query(
+      `SELECT id FROM dependants WHERE id = $1 AND client_id = $2 FOR UPDATE`,
+      [dependentId, clientId]
+    );
+
+    if (!checkRes.rows.length) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({ error: "dependent_not_found" });
+    }
+
+    // Build update query
+    const setters = [];
+    const params = [];
+
+    function addSetter(column, value) {
+      setters.push(`${column} = $${params.length + 1}`);
+      params.push(value);
+    }
+
+    if (payload.first_name !== undefined)
+      addSetter("first_name", payload.first_name);
+    if (payload.last_name !== undefined)
+      addSetter("last_name", payload.last_name);
+    if (payload.dob !== undefined) addSetter("dob", payload.dob);
+    if (payload.relationship !== undefined)
+      addSetter("relationship", payload.relationship);
+    if (payload.disability !== undefined)
+      addSetter("disability", payload.disability);
+    if (payload.disability_notes !== undefined)
+      addSetter("disability_notes", payload.disability_notes);
+
+    if (setters.length === 0) {
+      await conn.query("ROLLBACK");
+      return res.status(400).json({ error: "no_changes_provided" });
+    }
+
+    // Execute update
+    const idPlaceholder = `$${params.length + 1}`;
+    const sql = `UPDATE dependants SET ${setters.join(
+      ", "
+    )} WHERE id = ${idPlaceholder}`;
+    const finalParams = params.concat([dependentId]);
+
+    const result = await conn.query(sql, finalParams);
+
+    if (result.rowCount === 0) {
+      await conn.query("ROLLBACK");
+      return res.status(409).json({ error: "dependent_not_updated" });
+    }
+
+    await conn.query("COMMIT");
+
+    // Fetch updated record
+    const { rows } = await pool.query(
+      `SELECT * FROM dependants WHERE id = $1`,
+      [dependentId]
+    );
+
+    return res.json({
+      success: true,
+      message: "Dependent updated successfully",
+      dependent: rows[0],
+    });
+  } catch (err) {
+    try {
+      await conn.query("ROLLBACK");
+    } catch (e) {
+      console.error("rollback failed:", e);
+    }
+    console.error("patchDependent error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
 // Export all functions
 module.exports = {
   listClients,
@@ -1777,6 +1873,8 @@ module.exports = {
   deleteDependent,
   insertTaxRecord,
   deleteTaxRecord,
+  patchDependent,
+  patchTaxRecord,
   insertNote,
   deleteNote,
 };

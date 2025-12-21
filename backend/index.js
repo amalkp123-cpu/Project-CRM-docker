@@ -6,6 +6,7 @@ const { pool, initializeDatabase } = require("./database/db");
 const { authenticateToken } = require("./middleware/auth.middleware");
 const authRoutes = require("./routes/auth.routes");
 const pClientRoutes = require("./routes/pClient.routes");
+const fileRoutes = require("./routes/hst_docs");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use(
 // API Routes FIRST
 app.use("/api/auth", authRoutes);
 app.use("/api/pClient", authenticateToken, pClientRoutes);
+app.use("/api/hst-docs", authenticateToken, fileRoutes);
 
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));

@@ -112,7 +112,6 @@ export default function AddressSection({ control, register, errors }: Props) {
                 id={`addresses.${idx}.country`}
                 {...register(`addresses.${idx}.country`)}
                 defaultValue="Canada"
-                readOnly
               />
             </div>
           </div>
@@ -127,7 +126,7 @@ export default function AddressSection({ control, register, errors }: Props) {
         </div>
       ))}
 
-      <div className={styles.addDependent}>
+      {/* <div className={styles.addDependent}>
         <button
           type="button"
           onClick={() =>
@@ -143,7 +142,7 @@ export default function AddressSection({ control, register, errors }: Props) {
         >
           Add address
         </button>
-      </div>
+      </div> */}
     </section>
   );
 }

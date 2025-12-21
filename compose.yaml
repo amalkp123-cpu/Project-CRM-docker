@@ -36,6 +36,8 @@ services:
       - "4000:3000"
     env_file:
       - .env
+    volumes:
+      - ./uploads:/app/uploads
 
 volumes:
   db_data:

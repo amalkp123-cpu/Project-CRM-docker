@@ -184,40 +184,40 @@ export default function PersonalForm() {
     });
   }
 
-  function removeTax(index: any) {
-    const vals = getValues();
-    const arr = Array.isArray(vals.taxDetails) ? vals.taxDetails.slice() : [];
-    if (index < 0 || index >= arr.length) return;
-    arr.splice(index, 1);
-    setValue("taxDetails", arr, { shouldDirty: true, shouldValidate: true });
-  }
+  // function removeTax(index: any) {
+  //   const vals = getValues();
+  //   const arr = Array.isArray(vals.taxDetails) ? vals.taxDetails.slice() : [];
+  //   if (index < 0 || index >= arr.length) return;
+  //   arr.splice(index, 1);
+  //   setValue("taxDetails", arr, { shouldDirty: true, shouldValidate: true });
+  // }
 
-  function removeSpouseTax(index: any) {
-    const vals = getValues();
-    const arr = Array.isArray(vals.spouseTaxDetails)
-      ? vals.spouseTaxDetails.slice()
-      : [];
-    if (index < 0 || index >= arr.length) return;
-    arr.splice(index, 1);
-    setValue("spouseTaxDetails", arr, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-  }
+  // function removeSpouseTax(index: any) {
+  //   const vals = getValues();
+  //   const arr = Array.isArray(vals.spouseTaxDetails)
+  //     ? vals.spouseTaxDetails.slice()
+  //     : [];
+  //   if (index < 0 || index >= arr.length) return;
+  //   arr.splice(index, 1);
+  //   setValue("spouseTaxDetails", arr, {
+  //     shouldDirty: true,
+  //     shouldValidate: true,
+  //   });
+  // }
 
-  function renderExtraFields(
-    record: any,
-    known = ["taxYear", "filedOn", "amount", "refNumber"]
-  ) {
-    return Object.entries(record)
-      .filter(([k]) => !known.includes(k))
-      .map(([k, v]) => (
-        <div key={k} className={styles.taxExtraRow}>
-          <strong className={styles.taxExtraKey}>{k}:</strong>
-          <span className={styles.taxExtraVal}>{String(v ?? "")}</span>
-        </div>
-      ));
-  }
+  // function renderExtraFields(
+  //   record: any,
+  //   known = ["taxYear", "filedOn", "amount", "refNumber"]
+  // ) {
+  //   return Object.entries(record)
+  //     .filter(([k]) => !known.includes(k))
+  //     .map(([k, v]) => (
+  //       <div key={k} className={styles.taxExtraRow}>
+  //         <strong className={styles.taxExtraKey}>{k}:</strong>
+  //         <span className={styles.taxExtraVal}>{String(v ?? "")}</span>
+  //       </div>
+  //     ));
+  // }
 
   const [noteFields, setNoteFields] = useState<number[]>([0]);
 
@@ -229,8 +229,8 @@ export default function PersonalForm() {
     setNoteFields((prev) => prev.filter((_, i) => i !== id));
   };
 
-  const taxList = (getValues().taxDetails || []) as TaxRecord[];
-  const spouseTaxList = (getValues().spouseTaxDetails || []) as TaxRecord[];
+  // const taxList = (getValues().taxDetails || []) as TaxRecord[];
+  // const spouseTaxList = (getValues().spouseTaxDetails || []) as TaxRecord[];
 
   const onSubmit = async (data: any) => {
     try {
@@ -538,8 +538,8 @@ export default function PersonalForm() {
             </div>
           </section>
 
-          {/* Tax Details */}
-          <section className={styles.formSection}>
+          {/* Tax Details - Hidden for now */}
+          {/* <section className={styles.formSection}>
             <h3>Tax Section</h3>
             <div className={styles.addDependent}>
               <button type="button" onClick={() => setTaxModalVisible(true)}>
@@ -579,7 +579,7 @@ export default function PersonalForm() {
                 </div>
               )}
             </div>
-          </section>
+          </section> */}
 
           {/* Notes */}
           <section className={styles.formSection}>
@@ -779,7 +779,8 @@ export default function PersonalForm() {
               </div>
             </div>
 
-            <div className={styles.addDependent}>
+            {/* Spouse Tax Details - Hidden for now */}
+            {/*<div className={styles.addDependent}>
               <button
                 type="button"
                 onClick={() => setSpouseTaxModalVisible(true)}
@@ -788,7 +789,8 @@ export default function PersonalForm() {
               </button>
             </div>
 
-            <div className={styles.taxListSection}>
+            
+             <div className={styles.taxListSection}>
               {spouseTaxList.length === 0 ? (
                 <small>No spouse tax records</small>
               ) : (
@@ -822,7 +824,7 @@ export default function PersonalForm() {
                   ))}
                 </div>
               )}
-            </div>
+            </div> */}
           </section>
 
           <DependentsList

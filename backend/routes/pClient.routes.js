@@ -14,6 +14,8 @@ const {
   deleteTaxRecord,
   deleteNote,
   insertNote,
+  patchDependent,
+  patchTaxRecord,
 } = require("../controllers/pClient.Controller");
 
 const router = express.Router();
@@ -33,10 +35,12 @@ router.delete("/:id/addresses/:addressId", deleteAddress);
 // DEPENDENTS
 router.post("/:id/dependents", insertDependent);
 router.delete("/:id/dependents/:dependentId", deleteDependent);
+router.patch("/:id/dependents/:dependentId", patchDependent);
 
 // TAX RECORDS
 router.post("/:id/tax-records", insertTaxRecord);
 router.delete("/:id/tax-records/:taxId", deleteTaxRecord);
+router.patch("/:id/tax-records/:taxId", patchTaxRecord);
 
 // Notes
 router.post("/:id/notes", insertNote);

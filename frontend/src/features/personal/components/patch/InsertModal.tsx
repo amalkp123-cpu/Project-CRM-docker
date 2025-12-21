@@ -95,7 +95,7 @@ export default function InsertModal({
 }: InsertResourceModalProps) {
   const [activeTab, setActiveTab] = useState<
     "notes" | "address" | "dependent" | "tax" | "spouse"
-  >("notes");
+  >("tax");
   const [loading, setLoading] = useState(false);
 
   // Tax form state
@@ -142,6 +142,12 @@ export default function InsertModal({
     preparedBy: "",
     submittedBy: user?.id || "",
   });
+
+  const [taxRecordCreated, setTaxRecordCreated] = useState(false);
+  const [createdTaxRecordId, setCreatedTaxRecordId] = useState<string | null>(
+    null
+  );
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Spouse form state
   const [spouseForm, setSpouseForm] = useState<Spouse>({
@@ -195,6 +201,16 @@ export default function InsertModal({
       preparedBy: "",
       submittedBy: user?.id || "",
     });
+
+    setSelectedFile(null);
+
+    const fileInput = document.getElementById(
+      "taxAttachment"
+    ) as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = "";
+    }
+
     setSpouseForm({
       firstName: "",
       lastName: "",
@@ -208,6 +224,9 @@ export default function InsertModal({
   };
 
   const handleClose = () => {
+    setTaxRecordCreated(false);
+    setCreatedTaxRecordId(null);
+    setSelectedFile(null);
     resetForms();
     onClose();
   };
@@ -354,64 +373,140 @@ export default function InsertModal({
   };
 
   const handleAddTaxRecord = async () => {
-    // Validate tax year
-    if (!isValidYear(taxForm.taxYear)) {
-      alert("Enter a valid 4-digit year (e.g. 2025)");
-      return;
-    }
-
-    // Validate status
-    if (!taxForm.status) {
-      alert("Select status");
-      return;
-    }
-
-    // Validate date
-    if (!taxForm.taxDate) {
-      alert("Select a date for the chosen status");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-
-      // Build payload matching the backend API
-      const payload: any = {
-        taxYear: taxForm.taxYear,
-        taxStatus: taxForm.status,
-        taxDate: taxForm.taxDate,
-        hstRequired: false,
-        preparedBy: taxForm.preparedBy || null,
-        createdById: user?.id || null,
-      };
-
-      const res = await fetch(
-        `${API_URL}/api/pClient/${clientId}/tax-records`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to add tax record");
+    // STEP 1: Create the tax record
+    if (!taxRecordCreated) {
+      // Validate tax year
+      if (!isValidYear(taxForm.taxYear)) {
+        alert("Enter a valid 4-digit year (e.g. 2025)");
+        return;
+      }
+      // Validate status
+      if (!taxForm.status) {
+        alert("Select status");
+        return;
+      }
+      // Validate date
+      if (!taxForm.taxDate) {
+        alert("Select a date for the chosen status");
+        return;
       }
 
-      alert("Tax record added successfully!");
-      resetForms();
-      onSuccess();
-      handleClose();
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
-    } finally {
-      setLoading(false);
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        // Build payload matching the backend API
+        const payload: any = {
+          taxYear: taxForm.taxYear,
+          taxStatus: taxForm.status,
+          taxDate: taxForm.taxDate,
+          hstRequired: false,
+          preparedBy: taxForm.preparedBy || null,
+          createdById: user?.id || null,
+        };
+
+        const res = await fetch(
+          `${API_URL}/api/pClient/${clientId}/tax-records`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || "Failed to add tax record");
+        }
+
+        const data = await res.json();
+        console.log("Created tax record:", data.id);
+        const newRecordId = data.id;
+
+        // If status is "FiledOn", move to step 2 for attachment upload
+        if (taxForm.status === "FiledOn") {
+          setCreatedTaxRecordId(newRecordId);
+          setTaxRecordCreated(true);
+          alert("Tax record created! Please upload the filing attachment.");
+        } else {
+          // For other statuses, we're done
+          alert("Tax record added successfully!");
+          resetForms();
+          onSuccess();
+          handleClose();
+        }
+      } catch (error: any) {
+        alert(`Error: ${error.message}`);
+      } finally {
+        setLoading(false);
+      }
     }
+    // STEP 2: Upload the attachment
+    else {
+      // Validate file is selected
+      if (!selectedFile) {
+        alert("Please select a file to upload");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+
+        // Create FormData for file upload (similar to FileViewModal)
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        formData.append("uploaded_by", user?.id || "");
+        formData.append("clientId", clientId);
+
+        console.log(
+          "Uploading attachment for tax record ID:",
+          createdTaxRecordId
+        );
+
+        // Upload attachment to the created tax record
+        const res = await fetch(
+          `${API_URL}/api/hst-docs/${createdTaxRecordId}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
+
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || "Failed to upload attachment");
+        }
+
+        alert("Attachment uploaded successfully!");
+        resetForms();
+        setTaxRecordCreated(false);
+        setCreatedTaxRecordId(null);
+        setSelectedFile(null);
+        onSuccess();
+        handleClose();
+      } catch (error: any) {
+        alert(`Error: ${error.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Handler to skip attachment upload
+  const handleSkipAttachment = () => {
+    alert("Tax record created without attachment. You can add it later.");
+    resetForms();
+    setTaxRecordCreated(false);
+    setCreatedTaxRecordId(null);
+    setSelectedFile(null);
+    onSuccess();
+    handleClose();
   };
 
   // ========== SPOUSE HANDLER ==========
@@ -527,19 +622,27 @@ export default function InsertModal({
         {/* Tabs */}
         <div className={styles.tabs}>
           <button
+            className={activeTab === "tax" ? styles.activeTab : ""}
+            onClick={() => setActiveTab("tax")}
+            disabled={loading}
+          >
+            Tax Record
+          </button>
+          <button
             className={activeTab === "notes" ? styles.activeTab : ""}
             onClick={() => setActiveTab("notes")}
             disabled={loading}
           >
             Notes
           </button>
+          {/* Add address disabled for now
           <button
             className={activeTab === "address" ? styles.activeTab : ""}
             onClick={() => setActiveTab("address")}
             disabled={loading}
           >
             Address
-          </button>
+          </button> */}
           <button
             className={activeTab === "dependent" ? styles.activeTab : ""}
             onClick={() => setActiveTab("dependent")}
@@ -556,13 +659,6 @@ export default function InsertModal({
               Spouse
             </button>
           )}
-          <button
-            className={activeTab === "tax" ? styles.activeTab : ""}
-            onClick={() => setActiveTab("tax")}
-            disabled={loading}
-          >
-            Tax Record
-          </button>
         </div>
 
         <div className={styles.modalBody}>
@@ -587,7 +683,6 @@ export default function InsertModal({
               </div>
             </div>
           )}
-
           {/* ========== ADDRESS TAB ========== */}
           {activeTab === "address" && (
             <div className={styles.tabContent}>
@@ -700,7 +795,6 @@ export default function InsertModal({
               </div>
             </div>
           )}
-
           {/* ========== DEPENDENT TAB ========== */}
           {activeTab === "dependent" && (
             <div className={styles.tabContent}>
@@ -953,7 +1047,6 @@ export default function InsertModal({
               )}
             </div>
           )}
-
           {/* ========== SPOUSE TAB ========== */}
           {activeTab === "spouse" && (
             <div className={styles.tabContent}>
@@ -1101,117 +1194,177 @@ export default function InsertModal({
               </div>
             </div>
           )}
-
           {/* ========== TAX RECORD TAB ========== */}
           {activeTab === "tax" && (
             <div className={styles.tabContent}>
-              <h3>Add New Tax Record</h3>
+              {!taxRecordCreated ? (
+                <>
+                  <h3>Create Tax Record</h3>
 
-              <div className={styles.formField}>
-                <label htmlFor="taxYear">Tax Year *</label>
-                <input
-                  id="taxYear"
-                  type="text"
-                  placeholder="2025"
-                  value={taxForm.taxYear}
-                  onChange={(e) =>
-                    setTaxForm({
-                      ...taxForm,
-                      taxYear: e.target.value,
-                    })
-                  }
-                  disabled={loading}
-                />
-              </div>
-
-              <div className={styles.formField}>
-                <label htmlFor="taxStatus">Status *</label>
-                <select
-                  id="taxStatus"
-                  value={taxForm.status}
-                  onChange={(e) =>
-                    setTaxForm({
-                      ...taxForm,
-                      status: e.target.value as
-                        | "InProgress"
-                        | "ReadyToFile"
-                        | "FiledOn",
-                    })
-                  }
-                  disabled={loading}
-                >
-                  <option value="InProgress">InProgress</option>
-                  <option value="ReadyToFile">ReadyToFile</option>
-                  <option value="FiledOn">FiledOn</option>
-                </select>
-              </div>
-
-              <div className={styles.formField}>
-                <label htmlFor="taxDate">Date of action *</label>
-                <input
-                  id="taxDate"
-                  type="date"
-                  value={taxForm.taxDate || ""}
-                  onChange={(e) => {
-                    setTaxForm({
-                      ...taxForm,
-                      taxDate: e.target.value,
-                    });
-                  }}
-                  disabled={loading}
-                />
-              </div>
-
-              {taxForm.status === "FiledOn" && (
-                <div className={styles.formField}>
-                  <label htmlFor="taxAttachment">File attachment</label>
-                  <input
-                    id="taxAttachment"
-                    type="file"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
+                  <div className={styles.formField}>
+                    <label htmlFor="taxYear">Tax Year *</label>
+                    <input
+                      id="taxYear"
+                      type="text"
+                      placeholder="2025"
+                      value={taxForm.taxYear}
+                      onChange={(e) =>
                         setTaxForm({
                           ...taxForm,
-                          attachment: e.target.files[0].name,
-                        });
+                          taxYear: e.target.value,
+                        })
                       }
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className={styles.formField}>
+                    <label htmlFor="taxStatus">Status *</label>
+                    <select
+                      id="taxStatus"
+                      value={taxForm.status}
+                      onChange={(e) =>
+                        setTaxForm({
+                          ...taxForm,
+                          status: e.target.value as
+                            | "InProgress"
+                            | "ReadyToFile"
+                            | "FiledOn",
+                        })
+                      }
+                      disabled={loading}
+                    >
+                      <option value="InProgress">InProgress</option>
+                      <option value="ReadyToFile">ReadyToFile</option>
+                      <option value="FiledOn">FiledOn</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.formField}>
+                    <label htmlFor="taxDate">Date of action *</label>
+                    <input
+                      id="taxDate"
+                      type="date"
+                      value={taxForm.taxDate || ""}
+                      onChange={(e) => {
+                        setTaxForm({
+                          ...taxForm,
+                          taxDate: e.target.value,
+                        });
+                      }}
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className={styles.formField}>
+                    <label htmlFor="preparedBy">Prepared By</label>
+                    <input
+                      id="preparedBy"
+                      placeholder="Preparer name"
+                      value={taxForm.preparedBy}
+                      onChange={(e) =>
+                        setTaxForm({
+                          ...taxForm,
+                          preparedBy: e.target.value,
+                        })
+                      }
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className={styles.formField}>
+                    <label htmlFor="submittedBy">Submitted By</label>
+                    <input
+                      id="submittedBy"
+                      placeholder="Submitter name"
+                      value={user?.username}
+                      readOnly
+                      disabled={true}
+                    />
+                  </div>
+
+                  {taxForm.status === "FiledOn" && (
+                    <div
+                      style={{
+                        padding: "12px",
+                        backgroundColor: "#e3f2fd",
+                        borderRadius: "6px",
+                        marginTop: "12px",
+                        fontSize: "14px",
+                        color: "#1565c0",
+                      }}
+                    >
+                      ℹ️ After creating the record, you'll be prompted to upload
+                      the filing attachment.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h3>Upload Filing Attachment</h3>
+
+                  <div
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#e8f5e9",
+                      borderRadius: "6px",
+                      marginBottom: "20px",
+                      fontSize: "14px",
+                      color: "#2e7d32",
                     }}
-                    disabled={loading}
-                  />
-                </div>
+                  >
+                    ✓ Tax record for year {taxForm.taxYear} has been created
+                    successfully.
+                  </div>
+
+                  <div className={styles.formField}>
+                    <label htmlFor="taxAttachment">File attachment *</label>
+                    <input
+                      id="taxAttachment"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          setSelectedFile(e.target.files[0]);
+                          setTaxForm({
+                            ...taxForm,
+                            attachment: e.target.files[0].name,
+                          });
+                        }
+                      }}
+                      disabled={loading}
+                    />
+                    {selectedFile && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          fontSize: "13px",
+                          color: "#666",
+                        }}
+                      >
+                        Selected: {selectedFile.name}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
-
-              <div className={styles.formField}>
-                <label htmlFor="preparedBy">Prepared By</label>
-                <input
-                  id="preparedBy"
-                  placeholder="Preparer name"
-                  value={taxForm.preparedBy}
-                  onChange={(e) =>
-                    setTaxForm({
-                      ...taxForm,
-                      preparedBy: e.target.value,
-                    })
-                  }
-                  disabled={loading}
-                />
-              </div>
-
-              <div className={styles.formField}>
-                <label htmlFor="submittedBy">Submitted By</label>
-                <input
-                  id="submittedBy"
-                  placeholder="Submitter name"
-                  value={user?.username}
-                  readOnly
-                  disabled={true}
-                />
-              </div>
             </div>
           )}
         </div>
 
         <div className={styles.modalFooter}>
+          {/* Show skip button only in step 2 of tax record */}
+          {activeTab === "tax" && taxRecordCreated && (
+            <button
+              onClick={handleSkipAttachment}
+              disabled={loading}
+              className={styles.cancelButton}
+              style={{ marginRight: "auto" }}
+            >
+              Skip for now
+            </button>
+          )}
+
           <button
             onClick={handleClose}
             disabled={loading}
@@ -1219,6 +1372,7 @@ export default function InsertModal({
           >
             Cancel
           </button>
+
           <button
             onClick={
               activeTab === "notes"
@@ -1235,15 +1389,21 @@ export default function InsertModal({
             className={styles.submitButton}
           >
             {loading
-              ? "Adding..."
+              ? "Processing..."
+              : activeTab === "tax" && taxRecordCreated
+              ? "Upload Attachment"
+              : activeTab === "tax"
+              ? "Create Tax Record"
               : `Add ${
-                  activeTab === "address"
+                  activeTab === "notes"
+                    ? "Note"
+                    : activeTab === "address"
                     ? "Address"
                     : activeTab === "dependent"
                     ? "Dependent"
                     : activeTab === "spouse"
                     ? "Spouse"
-                    : "Tax Record"
+                    : ""
                 }`}
           </button>
         </div>

@@ -4,6 +4,9 @@ const API_URL = import.meta.env.VITE_API_URL;
 import styles from "./PersonalDetails.module.css";
 import PersonalPatchModal from "./patch/PersonalPatchModal";
 import InsertModal from "./patch/InsertModal";
+import FileViewModal from "./files/FileViewModal";
+import EditTaxModal from "./patch/EditTaxModal";
+import EditDependantModal from "./patch/EditDependantModal";
 import { MdDelete } from "react-icons/md";
 import { MdEdit } from "react-icons/md";
 import { IoMdAdd } from "react-icons/io";
@@ -19,8 +22,19 @@ export default function PersonalDetails() {
   const [err, setErr] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [patchModalVisible, setPatchModalVisible] = useState(false);
-  const [insertModalVisible, setInsertModalVisible] = useState(false); // NEW
+  const [insertModalVisible, setInsertModalVisible] = useState(false);
+  const [fileModalVisible, setFileModalVisible] = useState(false);
+  const [activeTaxRecordId, setActiveTaxRecordId] = useState<string | null>(
+    null
+  );
   const [patchSaving, setPatchSaving] = useState(false);
+
+  // Edit modal states
+  const [editTaxModalVisible, setEditTaxModalVisible] = useState(false);
+  const [editDependantModalVisible, setEditDependantModalVisible] =
+    useState(false);
+  const [selectedTaxRecord, setSelectedTaxRecord] = useState<any>(null);
+  const [selectedDependant, setSelectedDependant] = useState<any>(null);
 
   const [user, setUser]: any = useState("");
 
@@ -86,30 +100,30 @@ export default function PersonalDetails() {
   };
 
   // DELETE ADDRESS
-  const handleDeleteAddress = async (addressId: string) => {
-    if (!confirm("Delete this address?")) return;
+  // const handleDeleteAddress = async (addressId: string) => {
+  //   if (!confirm("Delete this address?")) return;
 
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${API_URL}/api/pClient/${id}/addresses/${addressId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+  //   try {
+  //     const token = localStorage.getItem("token");
+  //     const res = await fetch(
+  //       `${API_URL}/api/pClient/${id}/addresses/${addressId}`,
+  //       {
+  //         method: "DELETE",
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       }
+  //     );
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to delete address");
-      }
+  //     if (!res.ok) {
+  //       const error = await res.json();
+  //       throw new Error(error.message || "Failed to delete address");
+  //     }
 
-      alert("Address deleted successfully");
-      fetchClient(); // Refresh client data
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
-    }
-  };
+  //     alert("Address deleted successfully");
+  //     fetchClient();
+  //   } catch (error: any) {
+  //     alert(`Error: ${error.message}`);
+  //   }
+  // };
 
   // DELETE DEPENDENT
   const handleDeleteDependent = async (dependentId: string) => {
@@ -131,7 +145,7 @@ export default function PersonalDetails() {
       }
 
       alert("Dependent deleted successfully");
-      fetchClient(); // Refresh client data
+      fetchClient();
     } catch (error: any) {
       alert(`Error: ${error.message}`);
     }
@@ -154,7 +168,7 @@ export default function PersonalDetails() {
       }
 
       alert("Note deleted successfully");
-      fetchClient(); // Refresh client data
+      fetchClient();
     } catch (error: any) {
       alert(`Error: ${error.message}`);
     }
@@ -180,7 +194,7 @@ export default function PersonalDetails() {
       }
 
       alert("Tax record deleted successfully");
-      fetchClient(); // Refresh client data
+      fetchClient();
     } catch (error: any) {
       alert(`Error: ${error.message}`);
     }
@@ -191,13 +205,23 @@ export default function PersonalDetails() {
       .toLowerCase()
       .replace(/(^\w|[\s-_]\w)/g, (m: any) => m.trim().toUpperCase());
 
-  function formatDateIso(iso: string | null | undefined) {
-    if (!iso) return "N/A";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "N/A";
-    return d.toLocaleDateString() != "1/1/1970"
-      ? d.toLocaleDateString()
-      : "N/A";
+  function formatDate(dateString: string | null | undefined) {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "N/A";
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    // Return in your preferred format
+    return `${day}/${month}/${year}`; // DD/MM/YYYY
+    // or return `${month}/${day}/${year}`; // MM/DD/YYYY
+    // or return `${year}-${month}-${day}`; // YYYY-MM-DD
+  }
+
+  async function refreshClient() {
+    await fetchClient();
   }
 
   if (loading) return <div className={styles.loading}>Loading…</div>;
@@ -206,6 +230,10 @@ export default function PersonalDetails() {
 
   const latestTax = client.tax_records?.[0];
   const spouseTax = spouse?.tax_records?.[0];
+
+  const activeTaxRecord = client.tax_records.find(
+    (tr: any) => tr.id === activeTaxRecordId
+  );
 
   return (
     <div className={styles.mainSection}>
@@ -237,7 +265,7 @@ export default function PersonalDetails() {
                 className={styles.editBtn}
                 onClick={() => setInsertModalVisible(true)}
                 disabled={patchSaving}
-                title="Insert address, dependents, taxes"
+                title="Insert notes, dependents, taxes"
               >
                 <IoMdAdd size={"1.5rem"} />
               </button>
@@ -268,69 +296,55 @@ export default function PersonalDetails() {
               }`}
             >
               <Field label="SIN" value={client.sin_original} />
-              <Field label="DOB" value={formatDateIso(client.dob)} />
+              <Field label="DOB" value={formatDate(client.dob)} />
               <Field label="Gender" value={client.gender} />
               <Field label="Phone" value={client.phone} />
               <Field label="Email" value={client.email} />
               <Field label="Fax" value={client.fax} />
               <Field label="Status" value={latestTax?.tax_status} />
-              <Field
-                label="Tax Date"
-                value={formatDateIso(latestTax?.tax_date)}
-              />
+              <Field label="Tax Date" value={formatDate(latestTax?.tax_date)} />
               <Field label="Tax Year" value={latestTax?.tax_year} />
               <Field label="Marital Status" value={client.marital_status} />
               <Field
                 label="Date of Marriage"
-                value={formatDateIso(client.date_of_marriage)}
+                value={formatDate(client.date_of_marriage)}
               />
               <Field
                 label="Loyalty Since"
-                value={formatDateIso(client.loyalty_since)}
+                value={formatDate(client.loyalty_since)}
               />
               <Field label="Created By" value={client.created_by_username} />
-              <Field
-                label="Created at"
-                value={formatDateIso(client.created_at)}
-              />
+              <Field label="Created at" value={formatDate(client.created_at)} />
               <Field label="Referred By" value={client.referred_by} />
             </div>
           </div>
-          {/* ADDRESSES WITH DELETE BUTTONS */}
+          {/* ADDRESSES - Updated for singular */}
           {client.addresses?.length !== 0 && (
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Addresses</h3>
+                <h3 className={styles.sectionTitle}>Address</h3>
               </div>
-              <div className={styles.blockContainer}>
-                {client.addresses.map((addr: any) => (
-                  <div key={addr.id} className={styles.blockWithDelete}>
-                    <div className={styles.block}>
-                      <div>
-                        {addr.address_line1}
-                        {addr.address_line2 ? `, ${addr.address_line2}` : ""}
-                      </div>
-                      <div>
-                        {addr.city}, {addr.province} {addr.postal_code}
-                      </div>
-                      <div>{addr.country}</div>
-                      {addr.is_primary && (
-                        <span className={styles.tag}>Primary</span>
-                      )}
-                    </div>
-                    <button
-                      className={styles.deleteItemBtn}
-                      onClick={() => handleDeleteAddress(addr.id)}
-                      title="Delete address"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
-              </div>
+              {client.addresses.slice(0, 1).map((addr: any) => (
+                <div
+                  key={addr.id}
+                  className={`${styles.grid} ${
+                    spouse?.id && !hideSpouse ? "" : styles.gridFlex
+                  }`}
+                >
+                  <Field label="Line 1" value={addr.address_line1} />
+                  <Field
+                    label="Line 2"
+                    value={addr.address_line2 ? `, ${addr.address_line2}` : ""}
+                  />
+                  <Field label="City" value={addr.city} />
+                  <Field label="Province" value={addr.province} />
+                  <Field label="Postal" value={addr.postal_code} />
+                  <Field label="Country" value={addr.country} />
+                </div>
+              ))}
             </div>
           )}
-          {/* TAX RECORDS WITH DELETE BUTTONS */}
+          {/* TAX RECORDS WITH EDIT AND DELETE BUTTONS */}
           {client.tax_records?.length !== 0 && (
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
@@ -364,27 +378,46 @@ export default function PersonalDetails() {
                             </span>
                           </td>
                           <td>
-                            {tax.tax_date
-                              ? new Date(tax.tax_date).toLocaleDateString()
-                              : "—"}
+                            {tax.tax_date ? formatDate(tax.tax_date) : "—"}
                           </td>
                           <td>{tax.created_by}</td>
                           <td>{tax.prepared_by}</td>
                           <td>
-                            {tax.hst_required === null
-                              ? "None"
-                              : tax.hst_required
-                              ? "Yes"
-                              : "No"}
+                            {tax.hst_docs === null ? (
+                              "None"
+                            ) : tax.hst_docs ? (
+                              <button
+                                onClick={() => {
+                                  setActiveTaxRecordId(tax.id);
+                                  setFileModalVisible(true);
+                                }}
+                              >
+                                Open
+                              </button>
+                            ) : (
+                              "No"
+                            )}
                           </td>
                           <td>
-                            <button
-                              className={styles.deleteBtn}
-                              onClick={() => handleDeleteTaxRecord(tax.id)}
-                              title="Delete tax record"
-                            >
-                              Delete
-                            </button>
+                            <div className={styles.buttonContainer}>
+                              <button
+                                className={styles.editBtn}
+                                onClick={() => {
+                                  setSelectedTaxRecord(tax);
+                                  setEditTaxModalVisible(true);
+                                }}
+                                title="Edit tax record"
+                              >
+                                <MdEdit size={"1rem"} />
+                              </button>
+                              <button
+                                className={styles.deleteBtn}
+                                onClick={() => handleDeleteTaxRecord(tax.id)}
+                                title="Delete tax record"
+                              >
+                                <MdDelete size={"1rem"} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -412,7 +445,7 @@ export default function PersonalDetails() {
                       <div className={styles.italicTag}>
                         -{note.created_by}
                         <br />
-                        {formatDateIso(note.created_at)}
+                        {formatDate(note.created_at)}
                       </div>
                     </div>
                     <button
@@ -467,7 +500,7 @@ export default function PersonalDetails() {
               <h3 className={styles.sectionTitle}>Personal</h3>
               <div className={styles.grid}>
                 <Field label="SIN" value={spouse.sin_original} />
-                <Field label="DOB" value={formatDateIso(spouse.dob)} />
+                <Field label="DOB" value={formatDate(spouse.dob)} />
                 <Field label="Gender" value={spouse.gender} />
                 <Field label="Phone" value={spouse.phone} />
                 <Field label="Email" value={spouse.email} />
@@ -475,57 +508,51 @@ export default function PersonalDetails() {
                 <Field label="Status" value={spouseTax?.tax_status} />
                 <Field
                   label="Tax Date"
-                  value={formatDateIso(spouseTax?.tax_date)}
+                  value={formatDate(spouseTax?.tax_date)}
                 />
                 <Field label="Tax Year" value={spouseTax?.tax_year} />
                 <Field label="Marital Status" value={spouse.marital_status} />
                 <Field
                   label="Date of Marriage"
-                  value={formatDateIso(spouse.date_of_marriage)}
+                  value={formatDate(spouse.date_of_marriage)}
                 />
                 <Field
                   label="Loyalty Since"
-                  value={formatDateIso(spouse.loyalty_since)}
+                  value={formatDate(spouse.loyalty_since)}
                 />
                 <Field label="Created By" value={spouse.created_by_username} />
                 <Field
                   label="Created at"
-                  value={formatDateIso(spouse.created_at)}
+                  value={formatDate(spouse.created_at)}
                 />
               </div>
             </div>
-            {/* ADDRESSES WITH DELETE BUTTONS */}
+            {/* ADDRESSES - Updated for singular */}
             {spouse.addresses?.length !== 0 && (
               <div className={styles.section}>
                 <div className={styles.sectionHeader}>
                   <h3 className={styles.sectionTitle}>Addresses</h3>
                 </div>
-                <div className={styles.blockContainer}>
-                  {spouse.addresses.map((addr: any) => (
-                    <div key={addr.id} className={styles.blockWithDelete}>
-                      <div className={styles.block}>
-                        <div>
-                          {addr.address_line1}
-                          {addr.address_line2 ? `, ${addr.address_line2}` : ""}
-                        </div>
-                        <div>
-                          {addr.city}, {addr.province} {addr.postal_code}
-                        </div>
-                        <div>{addr.country}</div>
-                        {addr.is_primary && (
-                          <span className={styles.tag}>Primary</span>
-                        )}
-                      </div>
-                      <button
-                        className={styles.deleteItemBtn}
-                        onClick={() => handleDeleteAddress(addr.id)}
-                        title="Delete address"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                {spouse.addresses.slice(0, 1).map((addr: any) => (
+                  <div
+                    key={addr.id}
+                    className={`${styles.grid} ${
+                      spouse?.id && !hideSpouse ? "" : styles.gridFlex
+                    }`}
+                  >
+                    <Field label="Line 1" value={addr.address_line1} />
+                    <Field
+                      label="Line 2"
+                      value={
+                        addr.address_line2 ? `, ${addr.address_line2}` : ""
+                      }
+                    />
+                    <Field label="City" value={addr.city} />
+                    <Field label="Province" value={addr.province} />
+                    <Field label="Postal" value={addr.postal_code} />
+                    <Field label="Country" value={addr.country} />
+                  </div>
+                ))}
               </div>
             )}
             {/* TAX RECORDS WITH DELETE BUTTONS */}
@@ -561,9 +588,7 @@ export default function PersonalDetails() {
                               </span>
                             </td>
                             <td>
-                              {tax.tax_date
-                                ? new Date(tax.tax_date).toLocaleDateString()
-                                : "—"}
+                              {tax.tax_date ? formatDate(tax.tax_date) : "—"}
                             </td>
                             <td>{tax.created_by}</td>
                             <td>{tax.prepared_by}</td>
@@ -596,7 +621,7 @@ export default function PersonalDetails() {
                         <div className={styles.italicTag}>
                           -{note.created_by}
                           <br />
-                          {formatDateIso(note.created_at)}
+                          {formatDate(note.created_at)}
                         </div>
                       </div>
                       <button
@@ -615,6 +640,7 @@ export default function PersonalDetails() {
         )}
       </div>
 
+      {/* DEPENDANTS WITH EDIT AND DELETE BUTTONS */}
       {allDependants.length > 0 && (
         <div className={`${styles.section} ${styles.dependentSection}`}>
           <div className={styles.sectionHeader}>
@@ -633,10 +659,7 @@ export default function PersonalDetails() {
                     {dep.first_name} {dep.last_name}
                   </div>
 
-                  <Field
-                    label="DOB"
-                    value={new Date(dep.dob).toLocaleDateString()}
-                  />
+                  <Field label="DOB" value={formatDate(dep.dob)} />
 
                   {dep.disability && (
                     <Field
@@ -646,27 +669,40 @@ export default function PersonalDetails() {
                   )}
                 </div>
 
-                <button
-                  className={styles.deleteItemBtn}
-                  onClick={() => handleDeleteDependent(dep.id)}
-                  title="Delete dependent"
-                >
-                  Delete
-                </button>
+                <div className={styles.buttonContainer}>
+                  <button
+                    className={styles.editBtn}
+                    onClick={() => {
+                      setSelectedDependant(dep);
+                      setEditDependantModalVisible(true);
+                    }}
+                    title="Edit dependent"
+                  >
+                    <MdEdit size={"1rem"} />
+                  </button>
+                  <button
+                    className={styles.deleteItemBtn}
+                    onClick={() => handleDeleteDependent(dep.id)}
+                    title="Delete dependent"
+                  >
+                    <MdDelete size={"1rem"} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* MODALS */}
       <PersonalPatchModal
         visible={patchModalVisible}
         client={patchClient}
         onClose={() => setPatchModalVisible(false)}
-        onSaved={async (updatedPayload: Record<string, any>) => {
+        onSaved={async () => {
           setPatchSaving(true);
           try {
-            setClient((prev: any) => ({ ...prev, ...updatedPayload }));
+            await fetchClient();
           } finally {
             setPatchSaving(false);
             setPatchModalVisible(false);
@@ -674,17 +710,55 @@ export default function PersonalDetails() {
         }}
       />
 
-      {/* NEW INSERT MODAL */}
       <InsertModal
         visible={insertModalVisible}
         onClose={() => setInsertModalVisible(false)}
         hasSpouse={spouse != null ? true : false}
         clientId={id!}
         onSuccess={() => {
-          // Refresh client data after successful insert
           fetchClient();
         }}
         user={user}
+      />
+
+      {fileModalVisible && activeTaxRecord && (
+        <FileViewModal
+          taxRecord={{ ...activeTaxRecord }}
+          clientId={id}
+          user={user}
+          onClose={() => setFileModalVisible(false)}
+          onRefresh={refreshClient}
+        />
+      )}
+
+      <EditTaxModal
+        visible={editTaxModalVisible}
+        taxRecord={selectedTaxRecord}
+        clientId={id!}
+        onClose={() => {
+          setEditTaxModalVisible(false);
+          setSelectedTaxRecord(null);
+        }}
+        onSaved={() => {
+          fetchClient();
+          setEditTaxModalVisible(false);
+          setSelectedTaxRecord(null);
+        }}
+      />
+
+      <EditDependantModal
+        visible={editDependantModalVisible}
+        dependant={selectedDependant}
+        clientId={id!}
+        onClose={() => {
+          setEditDependantModalVisible(false);
+          setSelectedDependant(null);
+        }}
+        onSaved={() => {
+          fetchClient();
+          setEditDependantModalVisible(false);
+          setSelectedDependant(null);
+        }}
       />
     </div>
   );

@@ -7,8 +7,6 @@ exports.getProfile = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    console.log("Decoded token:", req.user);
-
     const sql = `
       SELECT id AS userid, username, full_name, role, created_at
       FROM app_users

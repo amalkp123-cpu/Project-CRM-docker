@@ -15,9 +15,22 @@ import SignIn from "./pages/SignIn";
 function App() {
   const navigate = useNavigate();
 
+  function isTokenExpired(token: string) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      return payload.exp * 1000 < Date.now();
+    } catch {
+      return true;
+    }
+  }
+
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) navigate("/signin", { replace: true });
+
+    if (!token || isTokenExpired(token)) {
+      localStorage.removeItem("token");
+      navigate("/signin", { replace: true });
+    }
   }, [navigate]);
 
   return (
