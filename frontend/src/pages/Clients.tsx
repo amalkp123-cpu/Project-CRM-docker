@@ -1,25 +1,41 @@
 // Clients.tsx
 import { useState } from "react";
 import styles from "./Home.module.css";
-import PersonalTable from "../features/personal/components/PersonalTable";
+import { PersonalTable } from "../features/personal";
+import { BusinessTable } from "../features/business";
 
 // icons
 import { IoSearchSharp } from "react-icons/io5";
-import { FaSortAmountDownAlt } from "react-icons/fa";
 
 const Clients = () => {
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"personal" | "business">(
+    "personal"
+  );
 
   return (
     <div className={styles.home}>
       <div className={styles.tableSection}>
         <div className={styles.tableSectionHeader}>
           <div className={styles.tableTabs}>
-            <div className={styles.active}>Personal Clients</div>
-            <div>Business Clients</div>
+            <div
+              onClick={() => {
+                setActiveTab("personal");
+              }}
+              className={activeTab == "personal" ? styles.active : ""}
+            >
+              Personal Clients
+            </div>
+            <div
+              onClick={() => {
+                setActiveTab("business");
+              }}
+              className={activeTab == "business" ? styles.active : ""}
+            >
+              Business Clients
+            </div>
           </div>
         </div>
-
         <div className={styles.homebar}>
           <div className={styles.search}>
             <input
@@ -32,15 +48,10 @@ const Clients = () => {
             />
             <IoSearchSharp className={styles.searchIcon} />
           </div>
-
-          <div className={styles.tableSort}>
-            <FaSortAmountDownAlt />
-            Sort
-          </div>
         </div>
-
         <div className={styles.tableContainer}>
-          <PersonalTable search={search} />
+          {activeTab == "personal" && <PersonalTable search={search} />}
+          {activeTab == "business" && <BusinessTable search={search} />}
         </div>
       </div>
     </div>

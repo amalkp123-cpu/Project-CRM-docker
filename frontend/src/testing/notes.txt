@@ -1,0 +1,44 @@
+CRM
+
+Todo List:
+
+Business Clients
+
+Business details:- Business Name,Business number, Business type, Incorporation date, Incorporation Jurisdiction, Fiscal year end, Ontario Corporation number, Address, Mailing address: If different, Phone 1 (cell), Phone 2 (home), Phone 3 (work), Fax, Email, Loyalty since date, Referred by, Created by, Updated by
+
+Shareholders:- fullname, share percentage, dob, SIN, client_id_foreign_key if exist
+
+Taxes > HST, Corporation, Payroll, WSIB, Audit, Annual renewal
+
+HST details:- Monthly/Quaterly/Yearly, Starting date
+HST:- Year, Period, Amount, Attachment_id, Confirmation No., Prepared By, Reviewed By, Submitted By, Created_at, Updated_at
+
+Corpo details:- Starting date(year)
+Corpo:- Fiscal_end date, Amount, Attachment_id, Confirmation no. ,Prepared by, Signed by client, Reviewed by, Submitted by, Created_at, Updated_at
+
+Payroll details:- Starting year
+Payroll:- Fiscal_end, Amount, Attachment_id, Confirmation no. ,Prepared by, Signed by client, Reviewed by, Submitted by, Created_at, Updated_at
+
+
+WSIB details:- Starting Quarter, year
+WSIB:- Quarter, Amount, Attachment, Confirmation no. ,Prepared by, Reviewed by, Submitted by, Created_at, Updated_at
+
+Annual Renewal(only for federation):- Date
+
+
+
+Business details:- Business Name,Business number, Business type, Incorporation date, Incorporation Jurisdiction, Fiscal year end, Ontario Corporation number, Address, Mailing address: If different, Phone 1 (cell), Phone 2 (home), Phone 3 (work), Fax, Email, Loyalty since date, Referred by, Created by, Updated by
+Shareholders:- fullname, share percentage, dob, SIN, client_id_foreign_key if exist
+HST details:- Monthly/Quaterly/Yearly, Starting date
+Corpo details:- Starting date(year)
+Payroll details:- Starting year
+WSIB details:- Starting Quarter, year
+Annual Renewal(only for federation):- Date
+
+
+
+Add/Manage users
+Dashboard + calender
+
+
+

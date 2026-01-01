@@ -1026,186 +1026,156 @@ async function deleteClient(req, res) {
 }
 
 async function patchClient(req, res) {
-  const clientId = req.params.id;
-  const payload = req.body || {};
-  const updatedBy = req.user?.id || null;
+  const businessId = req.params.id;
+  const { business, addresses, taxProfiles } = req.body || {};
 
-  if (!updatedBy) return res.status(401).json({ error: "unauthenticated" });
-  if (!clientId) return res.status(400).json({ error: "invalid_id" });
-
-  const clientConn = await pool.connect();
-
-  function pick(obj, ...keys) {
-    for (const k of keys) {
-      if (Object.prototype.hasOwnProperty.call(obj, k)) return obj[k];
-    }
-    return undefined;
+  if (!req.user?.id) {
+    return res.status(401).json({ error: "unauthenticated" });
   }
 
-  function nullify(v) {
-    return v === "" ? null : v;
-  }
+  const conn = await pool.connect();
 
   try {
-    await clientConn.query("BEGIN");
-    const now = new Date();
+    await conn.query("BEGIN");
 
-    // lock client
-    const checkRes = await clientConn.query(
-      `SELECT id FROM clients WHERE id = $1 FOR UPDATE`,
-      [clientId]
-    );
-    if (!checkRes.rows.length) {
-      await clientConn.query("ROLLBACK");
-      return res.status(404).json({ error: "client_not_found" });
-    }
+    /* ============================================================
+       1. PATCH business_clients
+    ============================================================ */
+    if (business && Object.keys(business).length) {
+      const fieldMap = {
+        businessName: "business_name",
+        businessNumber: "business_number",
+        businessType: "business_type",
+        email: "email",
+        phoneCell: "phone_cell",
+        phoneHome: "phone_home",
+        phoneWork: "phone_work",
+        fax: "fax",
+        loyaltySince: "loyalty_since",
+        referredBy: "referred_by",
+      };
 
-    // ======================
-    // CLIENT UPDATE
-    // ======================
+      const sets = [];
+      const vals = [];
 
-    const fieldMapping = {
-      firstName: "first_name",
-      lastName: "last_name",
-      dob: "dob",
-      gender: "gender",
-      phone: "phone",
-      email: "email",
-      fax: "fax",
-      maritalStatus: "marital_status",
-      loyalty: "loyalty_since",
-      referredBy: "referred_by",
-    };
-
-    const cSetters = [];
-    const cParams = [];
-
-    function cAdd(col, val) {
-      cSetters.push(`${col} = $${cParams.length + 1}`);
-      cParams.push(val);
-    }
-
-    for (const [pKey, dbCol] of Object.entries(fieldMapping)) {
-      const val = pick(payload, pKey, dbCol);
-      if (val !== undefined) cAdd(dbCol, nullify(val));
-    }
-
-    if (Object.prototype.hasOwnProperty.call(payload, "sin")) {
-      const sin = nullify(payload.sin);
-      if (sin) {
-        cAdd("sin_encrypted", encrypt(sin));
-        cAdd("sin_hash", sha256(sin));
-      } else {
-        cAdd("sin_encrypted", null);
-        cAdd("sin_hash", null);
-      }
-    }
-
-    if (cSetters.length > 0) {
-      cAdd("updated_at", now);
-      const idPos = `$${cParams.length + 1}`;
-      await clientConn.query(
-        `UPDATE clients SET ${cSetters.join(", ")} WHERE id = ${idPos}`,
-        cParams.concat(clientId)
-      );
-    }
-
-    // ======================
-    // ADDRESS UPDATE
-    // ======================
-
-    const addressFields = [
-      "address_line1",
-      "address_line2",
-      "city",
-      "province",
-      "postal_code",
-      "country",
-    ];
-
-    const addressPresent = addressFields.some((k) =>
-      Object.prototype.hasOwnProperty.call(payload, k)
-    );
-
-    if (addressPresent) {
-      const addrRes = await clientConn.query(
-        `SELECT id FROM addresses
-         WHERE client_id = $1
-         ORDER BY is_primary DESC, created_at ASC
-         LIMIT 1
-         FOR UPDATE`,
-        [clientId]
-      );
-
-      const aSetters = [];
-      const aParams = [];
-
-      function aAdd(col, val) {
-        aSetters.push(`${col} = $${aParams.length + 1}`);
-        aParams.push(val);
-      }
-
-      for (const col of addressFields) {
-        if (Object.prototype.hasOwnProperty.call(payload, col)) {
-          aAdd(col, nullify(payload[col]));
+      for (const [key, col] of Object.entries(fieldMap)) {
+        if (business[key] !== undefined) {
+          sets.push(`${col} = $${vals.length + 1}`);
+          vals.push(nullify(business[key]));
         }
       }
 
-      if (addrRes.rows.length) {
-        if (aSetters.length > 0) {
-          const idPos = `$${aParams.length + 1}`;
-          await clientConn.query(
-            `UPDATE addresses SET ${aSetters.join(", ")} WHERE id = ${idPos}`,
-            aParams.concat(addrRes.rows[0].id)
-          );
-        }
-      } else {
-        await clientConn.query(
-          `INSERT INTO addresses
-           (client_id, address_line1, address_line2, city, province, postal_code, country, is_primary)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,true)`,
-          [
-            clientId,
-            payload.address_line1 || null,
-            payload.address_line2 || null,
-            payload.city || null,
-            payload.province || null,
-            payload.postal_code || null,
-            payload.country || null,
-          ]
+      if (sets.length) {
+        sets.push(`updated_at = now()`);
+        vals.push(businessId);
+
+        await conn.query(
+          `UPDATE business_clients
+           SET ${sets.join(", ")}
+           WHERE id = $${vals.length}`,
+          vals
         );
       }
     }
 
-    // ======================
-    // COMMIT
-    // ======================
+    /* ============================================================
+       2. PATCH business_addresses
+    ============================================================ */
+    if (addresses) {
+      const addressFields = [
+        "country",
+        "province",
+        "city",
+        "address_line1",
+        "address_line2",
+        "postal_code",
+      ];
 
-    await clientConn.query("COMMIT");
+      for (const [role, flag] of [
+        ["primary", "is_primary"],
+        ["mailing", "is_mailing"],
+      ]) {
+        const data = addresses[role];
+        if (!data) continue;
 
-    const { rows } = await pool.query(
-      `SELECT id, first_name, last_name, dob, gender, phone, email, fax,
-              marital_status, loyalty_since, referred_by, updated_at
-       FROM clients WHERE id = $1`,
-      [clientId]
-    );
+        const sets = [];
+        const vals = [];
 
-    return res.json({
-      success: true,
-      message: "Client updated successfully",
-      client: rows[0],
-    });
+        for (const field of addressFields) {
+          if (data[field] !== undefined) {
+            sets.push(`${field} = $${vals.length + 1}`);
+            vals.push(nullify(data[field]));
+          }
+        }
+
+        if (sets.length) {
+          sets.push(`updated_at = now()`);
+          vals.push(businessId);
+
+          await conn.query(
+            `UPDATE business_addresses
+             SET ${sets.join(", ")}
+             WHERE business_id = $${vals.length}
+               AND ${flag} = true`,
+            vals
+          );
+        }
+      }
+    }
+
+    /* ============================================================
+       3. PATCH business_tax_profiles
+    ============================================================ */
+    if (Array.isArray(taxProfiles)) {
+      for (const tp of taxProfiles) {
+        if (!tp.id) continue;
+
+        const sets = [];
+        const vals = [];
+
+        if (tp.frequency !== undefined) {
+          sets.push(`frequency = $${vals.length + 1}`);
+          vals.push(nullify(tp.frequency));
+        }
+
+        if (tp.start_date !== undefined) {
+          sets.push(`start_date = $${vals.length + 1}`);
+          vals.push(nullify(tp.start_date));
+        }
+
+        if (tp.start_year !== undefined) {
+          sets.push(`start_year = $${vals.length + 1}`);
+          vals.push(nullify(tp.start_year));
+        }
+
+        if (tp.start_quarter !== undefined) {
+          sets.push(`start_quarter = $${vals.length + 1}`);
+          vals.push(nullify(tp.start_quarter));
+        }
+
+        if (sets.length) {
+          sets.push(`updated_at = now()`);
+          vals.push(tp.id, businessId);
+
+          await conn.query(
+            `UPDATE business_tax_profiles
+             SET ${sets.join(", ")}
+             WHERE id = $${vals.length - 1}
+               AND business_id = $${vals.length}`,
+            vals
+          );
+        }
+      }
+    }
+
+    await conn.query("COMMIT");
+    res.json({ success: true });
   } catch (err) {
-    try {
-      await clientConn.query("ROLLBACK");
-    } catch {}
-    console.error("patchClient error:", err);
-    return res.status(500).json({
-      error: "server_error",
-      details: err.message,
-    });
+    await conn.query("ROLLBACK");
+    console.error("patchBusiness:", err);
+    res.status(500).json({ error: "server_error" });
   } finally {
-    clientConn.release();
+    conn.release();
   }
 }
 
@@ -1668,8 +1638,6 @@ async function deleteTaxRecord(req, res) {
     });
   }
 }
-
-// Add these controller functions to your backend
 
 async function patchTaxRecord(req, res) {
   const { id: clientId, taxId } = req.params;

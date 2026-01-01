@@ -12,32 +12,41 @@ router.post("/:taxRecordId", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "no_file" });
 
   const { taxRecordId } = req.params;
-  const { clientId, notes } = req.body;
-
+  const { clientId, businessId, notes } = req.body;
   const checksum = crypto
     .createHash("sha256")
     .update(fs.readFileSync(req.file.path))
     .digest("hex");
 
+  if (!clientId && !businessId) {
+    return res.status(400).json({ error: "owner_required" });
+  }
+
+  if (clientId && businessId) {
+    return res.status(400).json({ error: "ambiguous_owner" });
+  }
+
   await pool.query(
     `
-      INSERT INTO hst_docs (
-        client_id,
-        tax_record_id,
-        filename,
-        object_store_key,
-        uploaded_by,
-        checksum,
-        notes
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `,
+  INSERT INTO hst_docs (
+    client_id,
+    business_id,
+    tax_record_id,
+    filename,
+    object_store_key,
+    uploaded_by,
+    checksum,
+    notes
+  )
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `,
     [
-      clientId,
+      clientId || null,
+      businessId || null,
       taxRecordId,
       req.file.originalname,
       req.file.filename,
-      req.user.id, // assuming auth middleware
+      req.user.id,
       checksum,
       notes || null,
     ]
@@ -51,7 +60,7 @@ router.get("/file/:docId", async (req, res) => {
 
   const { rows } = await pool.query(
     `
-    SELECT object_store_key, client_id
+    SELECT object_store_key, client_id, business_id
     FROM hst_docs
     WHERE id = $1
     `,

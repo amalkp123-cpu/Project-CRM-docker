@@ -4,11 +4,13 @@ import { Toaster } from "react-hot-toast";
 import NotFound from "./notfound";
 import MainLayout from "./layout/MainLayout";
 import { PersonalDetails } from "./features/personal";
+import { BusinessDetails } from "./features/business";
 import Home from "./pages/Home";
 import Clients from "./pages/Clients";
 import "./App.css";
 import NoNavbarLayout from "./layout/NoNavbarLayout";
 import AddPersonal from "./pages/AddPersonal";
+import AddBusiness from "./pages/AddBusiness";
 import EmptyLayout from "./layout/EmptyLayout";
 import SignIn from "./pages/SignIn";
 
@@ -47,6 +49,8 @@ function App() {
           <Route path="clients" element={<Clients />} />
           <Route path="personal/:id" element={<PersonalDetails />} />
           <Route path="add_personal" element={<AddPersonal />} />
+          <Route path="business/:id" element={<BusinessDetails />} />
+          <Route path="add_business" element={<AddBusiness />} />
         </Route>
 
         <Route element={<NoNavbarLayout />}>

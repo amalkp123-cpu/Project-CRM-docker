@@ -7,10 +7,13 @@ import Dashboard from "../features/dashboard/Dashboard";
 //icons
 import { IoSearchSharp } from "react-icons/io5";
 import { IoMdAdd } from "react-icons/io";
-import { FaSortAmountDownAlt } from "react-icons/fa";
+import { BusinessTable } from "../features/business";
 
 const Home = () => {
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"personal" | "business">(
+    "personal"
+  );
   return (
     <>
       <div className={styles.home}>
@@ -27,10 +30,12 @@ const Home = () => {
             <IoSearchSharp className={styles.searchIcon} />
           </div>
           <div className={styles.buttons}>
-            <div className={styles.addButton}>
-              <IoMdAdd />
-              Add New Business
-            </div>
+            <a href="./add_business">
+              <div className={styles.addButton}>
+                <IoMdAdd />
+                Add New Business
+              </div>
+            </a>
             <a href="./add_personal">
               <div className={styles.addButton}>
                 <IoMdAdd />
@@ -45,16 +50,27 @@ const Home = () => {
         <div className={styles.tableSection}>
           <div className={styles.tableSectionHeader}>
             <div className={styles.tableTabs}>
-              <div className={styles.active}>Personal Clients</div>
-              <div> Business Clients</div>
-            </div>
-            <div className={styles.tableSort}>
-              <FaSortAmountDownAlt />
-              Sort
+              <div
+                onClick={() => {
+                  setActiveTab("personal");
+                }}
+                className={activeTab == "personal" ? styles.active : ""}
+              >
+                Personal Clients
+              </div>
+              <div
+                onClick={() => {
+                  setActiveTab("business");
+                }}
+                className={activeTab == "business" ? styles.active : ""}
+              >
+                Business Clients
+              </div>
             </div>
           </div>
           <div className={styles.tableContainer}>
-            <PersonalTable search={search} />
+            {activeTab == "personal" && <PersonalTable search={search} />}
+            {activeTab == "business" && <BusinessTable search={search} />}
           </div>
         </div>
       </div>
