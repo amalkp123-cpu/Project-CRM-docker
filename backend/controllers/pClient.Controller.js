@@ -67,13 +67,19 @@ function nullify(v) {
 async function listClients(req, res) {
   try {
     const page = Math.max(1, parseInt(req.query.page || "1", 10));
-    const limit = Math.min(100, parseInt(req.query.limit || "200", 10));
-    const offset = (page - 1) * limit;
+    const rawLimit = req.query.limit;
+    const limit =
+      rawLimit === "0" || rawLimit === "all"
+        ? null
+        : Math.min(100, parseInt(rawLimit || "200", 10));
+
+    const offset = limit ? (page - 1) * limit : null;
     const search = (req.query.search || "").trim();
     const fields = sanitizeFields(req.query.fields);
     const sort = parseSort(req.query.sort);
 
-    // build select list mapping virtual fields to expressions
+    /* ================= SELECT COLUMNS ================= */
+
     const selectCols = fields
       .map((f) => {
         if (f === "latest_tax_year") return "tr.tax_year AS latest_tax_year";
@@ -82,17 +88,17 @@ async function listClients(req, res) {
         if (f === "spouse_name")
           return "CONCAT(spouse.first_name, ' ', spouse.last_name) AS spouse_name";
         if (f === "spouse_id") return "sl.linked_client_id AS spouse_id";
-        // otherwise select from clients table alias c
         return `c.${f}`;
       })
       .join(", ");
+
+    /* ================= WHERE ================= */
 
     const whereClauses = [];
     const params = [];
 
     if (search) {
-      params.push(`%${search}%`);
-      params.push(`%${search}%`);
+      params.push(`%${search}%`, `%${search}%`);
       whereClauses.push(
         `(c.first_name ILIKE $${params.length - 1} OR c.last_name ILIKE $${
           params.length
@@ -100,8 +106,7 @@ async function listClients(req, res) {
       );
     }
 
-    // tenant scoping: if req.user.tenant_id exists, enforce it
-    if (req.user && req.user.tenant_id) {
+    if (req.user?.tenant_id) {
       params.push(req.user.tenant_id);
       whereClauses.push(`c.tenant_id = $${params.length}`);
     }
@@ -110,7 +115,12 @@ async function listClients(req, res) {
       ? `WHERE ${whereClauses.join(" AND ")}`
       : "";
 
-    // main query: left join lateral latest tax record + spouse info
+    /* ================= PAGINATION ================= */
+
+    const paginationSql = limit
+      ? `LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
+      : "";
+
     const listSql = `
       SELECT ${selectCols}
       FROM clients c
@@ -121,30 +131,37 @@ async function listClients(req, res) {
         ORDER BY tax_year DESC
         LIMIT 1
       ) tr ON true
-      LEFT JOIN spouse_links sl ON (sl.client_id = c.id)
-      LEFT JOIN clients spouse ON (sl.linked_client_id = spouse.id)
+      LEFT JOIN spouse_links sl ON sl.client_id = c.id
+      LEFT JOIN clients spouse ON sl.linked_client_id = spouse.id
       ${whereSql}
       ORDER BY c.${sort.col} ${sort.dir}, c.id ${sort.dir}
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      ${paginationSql}
     `;
 
-    const listParams = [...params, limit, offset];
+    const listParams = limit ? [...params, limit, offset] : params;
     const listRes = await pool.query(listSql, listParams);
 
-    // count
+    /* ================= COUNT ================= */
+
     const countSql = `SELECT COUNT(1) AS total FROM clients c ${whereSql}`;
     const countRes = await pool.query(countSql, params);
     const total = Number(countRes.rows[0]?.total || 0);
 
     return res.json({
       data: listRes.rows,
-      meta: { total, page, per_page: limit, pages: Math.ceil(total / limit) },
+      meta: {
+        total,
+        page: limit ? page : 1,
+        per_page: limit ?? total,
+        pages: limit ? Math.ceil(total / limit) : 1,
+      },
     });
   } catch (err) {
     console.error("listClients error:", err);
-    return res
-      .status(500)
-      .json({ error: "server_error", details: err.message });
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
   }
 }
 
@@ -263,6 +280,27 @@ ORDER BY tr.tax_year DESC`,
         ...tr,
         hst_docs: hstByTaxRecord[tr.id] || [],
       }));
+
+      // businesses linked via shareholder relationship
+      const bizRes = await pool.query(
+        `
+  SELECT
+    bc.id            AS business_id,
+    bc.business_name    AS business_name,
+    bs.share_percentage,
+    CASE
+      WHEN bs.client_id IS NOT NULL THEN 'shareholder'
+      ELSE 'other'
+    END              AS role
+  FROM business_shareholders bs
+  JOIN business_clients bc ON bc.id = bs.business_id
+  WHERE bs.client_id = $1
+  ORDER BY bc.business_name ASC
+  `,
+        [clientId]
+      );
+
+      client.businesses = bizRes.rows;
 
       // verifications
       const verRes = await pool.query(
@@ -1026,156 +1064,186 @@ async function deleteClient(req, res) {
 }
 
 async function patchClient(req, res) {
-  const businessId = req.params.id;
-  const { business, addresses, taxProfiles } = req.body || {};
+  const clientId = req.params.id;
+  const payload = req.body || {};
+  const updatedBy = req.user?.id || null;
 
-  if (!req.user?.id) {
-    return res.status(401).json({ error: "unauthenticated" });
+  if (!updatedBy) return res.status(401).json({ error: "unauthenticated" });
+  if (!clientId) return res.status(400).json({ error: "invalid_id" });
+
+  const clientConn = await pool.connect();
+
+  function pick(obj, ...keys) {
+    for (const k of keys) {
+      if (Object.prototype.hasOwnProperty.call(obj, k)) return obj[k];
+    }
+    return undefined;
   }
 
-  const conn = await pool.connect();
+  function nullify(v) {
+    return v === "" ? null : v;
+  }
 
   try {
-    await conn.query("BEGIN");
+    await clientConn.query("BEGIN");
+    const now = new Date();
 
-    /* ============================================================
-       1. PATCH business_clients
-    ============================================================ */
-    if (business && Object.keys(business).length) {
-      const fieldMap = {
-        businessName: "business_name",
-        businessNumber: "business_number",
-        businessType: "business_type",
-        email: "email",
-        phoneCell: "phone_cell",
-        phoneHome: "phone_home",
-        phoneWork: "phone_work",
-        fax: "fax",
-        loyaltySince: "loyalty_since",
-        referredBy: "referred_by",
-      };
+    // lock client
+    const checkRes = await clientConn.query(
+      `SELECT id FROM clients WHERE id = $1 FOR UPDATE`,
+      [clientId]
+    );
+    if (!checkRes.rows.length) {
+      await clientConn.query("ROLLBACK");
+      return res.status(404).json({ error: "client_not_found" });
+    }
 
-      const sets = [];
-      const vals = [];
+    // ======================
+    // CLIENT UPDATE
+    // ======================
 
-      for (const [key, col] of Object.entries(fieldMap)) {
-        if (business[key] !== undefined) {
-          sets.push(`${col} = $${vals.length + 1}`);
-          vals.push(nullify(business[key]));
+    const fieldMapping = {
+      firstName: "first_name",
+      lastName: "last_name",
+      dob: "dob",
+      gender: "gender",
+      phone: "phone",
+      email: "email",
+      fax: "fax",
+      maritalStatus: "marital_status",
+      loyalty: "loyalty_since",
+      referredBy: "referred_by",
+    };
+
+    const cSetters = [];
+    const cParams = [];
+
+    function cAdd(col, val) {
+      cSetters.push(`${col} = $${cParams.length + 1}`);
+      cParams.push(val);
+    }
+
+    for (const [pKey, dbCol] of Object.entries(fieldMapping)) {
+      const val = pick(payload, pKey, dbCol);
+      if (val !== undefined) cAdd(dbCol, nullify(val));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "sin")) {
+      const sin = nullify(payload.sin);
+      if (sin) {
+        cAdd("sin_encrypted", encrypt(sin));
+        cAdd("sin_hash", sha256(sin));
+      } else {
+        cAdd("sin_encrypted", null);
+        cAdd("sin_hash", null);
+      }
+    }
+
+    if (cSetters.length > 0) {
+      cAdd("updated_at", now);
+      const idPos = `$${cParams.length + 1}`;
+      await clientConn.query(
+        `UPDATE clients SET ${cSetters.join(", ")} WHERE id = ${idPos}`,
+        cParams.concat(clientId)
+      );
+    }
+
+    // ======================
+    // ADDRESS UPDATE
+    // ======================
+
+    const addressFields = [
+      "address_line1",
+      "address_line2",
+      "city",
+      "province",
+      "postal_code",
+      "country",
+    ];
+
+    const addressPresent = addressFields.some((k) =>
+      Object.prototype.hasOwnProperty.call(payload, k)
+    );
+
+    if (addressPresent) {
+      const addrRes = await clientConn.query(
+        `SELECT id FROM addresses
+         WHERE client_id = $1
+         ORDER BY is_primary DESC, created_at ASC
+         LIMIT 1
+         FOR UPDATE`,
+        [clientId]
+      );
+
+      const aSetters = [];
+      const aParams = [];
+
+      function aAdd(col, val) {
+        aSetters.push(`${col} = $${aParams.length + 1}`);
+        aParams.push(val);
+      }
+
+      for (const col of addressFields) {
+        if (Object.prototype.hasOwnProperty.call(payload, col)) {
+          aAdd(col, nullify(payload[col]));
         }
       }
 
-      if (sets.length) {
-        sets.push(`updated_at = now()`);
-        vals.push(businessId);
-
-        await conn.query(
-          `UPDATE business_clients
-           SET ${sets.join(", ")}
-           WHERE id = $${vals.length}`,
-          vals
+      if (addrRes.rows.length) {
+        if (aSetters.length > 0) {
+          const idPos = `$${aParams.length + 1}`;
+          await clientConn.query(
+            `UPDATE addresses SET ${aSetters.join(", ")} WHERE id = ${idPos}`,
+            aParams.concat(addrRes.rows[0].id)
+          );
+        }
+      } else {
+        await clientConn.query(
+          `INSERT INTO addresses
+           (client_id, address_line1, address_line2, city, province, postal_code, country, is_primary)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,true)`,
+          [
+            clientId,
+            payload.address_line1 || null,
+            payload.address_line2 || null,
+            payload.city || null,
+            payload.province || null,
+            payload.postal_code || null,
+            payload.country || null,
+          ]
         );
       }
     }
 
-    /* ============================================================
-       2. PATCH business_addresses
-    ============================================================ */
-    if (addresses) {
-      const addressFields = [
-        "country",
-        "province",
-        "city",
-        "address_line1",
-        "address_line2",
-        "postal_code",
-      ];
+    // ======================
+    // COMMIT
+    // ======================
 
-      for (const [role, flag] of [
-        ["primary", "is_primary"],
-        ["mailing", "is_mailing"],
-      ]) {
-        const data = addresses[role];
-        if (!data) continue;
+    await clientConn.query("COMMIT");
 
-        const sets = [];
-        const vals = [];
+    const { rows } = await pool.query(
+      `SELECT id, first_name, last_name, dob, gender, phone, email, fax,
+              marital_status, loyalty_since, referred_by, updated_at
+       FROM clients WHERE id = $1`,
+      [clientId]
+    );
 
-        for (const field of addressFields) {
-          if (data[field] !== undefined) {
-            sets.push(`${field} = $${vals.length + 1}`);
-            vals.push(nullify(data[field]));
-          }
-        }
-
-        if (sets.length) {
-          sets.push(`updated_at = now()`);
-          vals.push(businessId);
-
-          await conn.query(
-            `UPDATE business_addresses
-             SET ${sets.join(", ")}
-             WHERE business_id = $${vals.length}
-               AND ${flag} = true`,
-            vals
-          );
-        }
-      }
-    }
-
-    /* ============================================================
-       3. PATCH business_tax_profiles
-    ============================================================ */
-    if (Array.isArray(taxProfiles)) {
-      for (const tp of taxProfiles) {
-        if (!tp.id) continue;
-
-        const sets = [];
-        const vals = [];
-
-        if (tp.frequency !== undefined) {
-          sets.push(`frequency = $${vals.length + 1}`);
-          vals.push(nullify(tp.frequency));
-        }
-
-        if (tp.start_date !== undefined) {
-          sets.push(`start_date = $${vals.length + 1}`);
-          vals.push(nullify(tp.start_date));
-        }
-
-        if (tp.start_year !== undefined) {
-          sets.push(`start_year = $${vals.length + 1}`);
-          vals.push(nullify(tp.start_year));
-        }
-
-        if (tp.start_quarter !== undefined) {
-          sets.push(`start_quarter = $${vals.length + 1}`);
-          vals.push(nullify(tp.start_quarter));
-        }
-
-        if (sets.length) {
-          sets.push(`updated_at = now()`);
-          vals.push(tp.id, businessId);
-
-          await conn.query(
-            `UPDATE business_tax_profiles
-             SET ${sets.join(", ")}
-             WHERE id = $${vals.length - 1}
-               AND business_id = $${vals.length}`,
-            vals
-          );
-        }
-      }
-    }
-
-    await conn.query("COMMIT");
-    res.json({ success: true });
+    return res.json({
+      success: true,
+      message: "Client updated successfully",
+      client: rows[0],
+    });
   } catch (err) {
-    await conn.query("ROLLBACK");
-    console.error("patchBusiness:", err);
-    res.status(500).json({ error: "server_error" });
+    try {
+      await clientConn.query("ROLLBACK");
+    } catch {}
+    console.error("patchClient error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
   } finally {
-    conn.release();
+    clientConn.release();
   }
 }
 

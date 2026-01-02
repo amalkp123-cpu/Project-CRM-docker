@@ -1,5 +1,5 @@
 const { pool } = require("../database/db");
-const { encrypt, sha256 } = require("../utils/crypto-utils");
+const { encrypt, sha256, decrypt } = require("../utils/crypto-utils");
 
 function nullify(v) {
   if (v === undefined || v === null) return null;
@@ -352,9 +352,15 @@ async function getBusiness(req, res) {
         bs.share_percentage,
         bs.client_id,
 
+        -- client-backed identity
         c.first_name AS client_first_name,
         c.last_name  AS client_last_name,
-        c.dob        AS client_dob
+        c.dob        AS client_dob,
+        c.sin_encrypted AS client_sin_encrypted,
+
+        -- standalone identity
+        bs.sin_encrypted AS standalone_sin_encrypted
+
       FROM business_shareholders bs
       LEFT JOIN clients c ON c.id = bs.client_id
       WHERE bs.business_id = $1
@@ -363,6 +369,36 @@ async function getBusiness(req, res) {
       `,
       [businessId]
     );
+
+    const shareholders = shareholdersRes.rows.map((sh) => {
+      let sin_original = null;
+
+      try {
+        const encrypted =
+          sh.client_id && sh.client_sin_encrypted
+            ? sh.client_sin_encrypted
+            : sh.standalone_sin_encrypted;
+
+        if (encrypted) {
+          sin_original = decrypt(encrypted);
+        }
+      } catch {
+        sin_original = null;
+      }
+      return {
+        id: sh.id,
+        share_percentage: sh.share_percentage,
+        client_id: sh.client_id,
+
+        full_name: sh.client_id
+          ? `${sh.client_first_name} ${sh.client_last_name}`
+          : sh.full_name,
+
+        dob: sh.client_id ? sh.client_dob : sh.dob,
+
+        sin_original,
+      };
+    });
 
     /* ================= TAX PROFILES ================= */
     const taxProfilesRes = await pool.query(
@@ -452,7 +488,7 @@ async function getBusiness(req, res) {
     return res.json({
       business,
       addresses: addrRes.rows,
-      shareholders: shareholdersRes.rows,
+      shareholders,
       tax_profiles: taxProfiles,
     });
   } catch (err) {
@@ -863,7 +899,7 @@ async function createBusinessShareholder(req, res) {
     return res.status(401).json({ error: "unauthenticated" });
   }
 
-  const { client_id, personal_client, full_name, dob, share_percentage } =
+  const { client_id, personal_client, full_name, dob, sin, share_percentage } =
     payload;
 
   if (!share_percentage || Number(share_percentage) <= 0) {
@@ -874,6 +910,14 @@ async function createBusinessShareholder(req, res) {
   const hasClientId = !!client_id;
   const hasPersonalClient = !!personal_client;
   const hasStandalone = !!full_name;
+
+  let sinEncrypted = null;
+  let sinHash = null;
+
+  if (sin) {
+    sinEncrypted = encrypt(sin);
+    sinHash = sin ? sha256(sin) : null;
+  }
 
   if (
     [hasClientId, hasPersonalClient, hasStandalone].filter(Boolean).length !== 1
@@ -914,22 +958,26 @@ async function createBusinessShareholder(req, res) {
       const insertClient = await conn.query(
         `
         INSERT INTO clients (
-          first_name,
-          last_name,
-          dob,
-          email,
-          phone,
-          created_by
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
+        first_name,
+        last_name,
+        dob,
+        email,
+        phone,
+        sin_encrypted,
+        sin_hash,
+        created_by
+      )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
         `,
         [
           pc.first_name,
           pc.last_name,
-          pc.dob || null,
+          pc.dob,
           pc.email || null,
           pc.phone || null,
+          sinEncrypted || null,
+          sinHash || null,
           createdBy,
         ]
       );
@@ -939,31 +987,36 @@ async function createBusinessShareholder(req, res) {
 
     /* ================= CASE 3: Standalone shareholder ================= */
     if (hasStandalone) {
-      if (!full_name) {
-        throw new Error("full_name_required");
-      }
+      if (!full_name) throw new Error("full_name_required");
+      if (!dob) throw new Error("dob_required_for_standalone");
+      if (!sin) throw new Error("sin_required_for_standalone");
     }
 
     /* ================= INSERT SHAREHOLDER ================= */
 
     await conn.query(
       `
-      INSERT INTO business_shareholders (
-        business_id,
-        client_id,
-        full_name,
-        dob,
-        share_percentage,
-        created_at,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+          INSERT INTO business_shareholders (
+      business_id,
+      client_id,
+      full_name,
+      dob,
+      sin_encrypted,
+      sin_hash,
+      share_percentage,
+      created_at,
+      updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+
       `,
       [
         businessId,
         resolvedClientId,
         hasStandalone ? full_name : null,
-        hasStandalone ? dob || null : null,
+        hasStandalone ? dob : null,
+        hasStandalone ? sinEncrypted : null,
+        hasStandalone ? sinHash : null,
         share_percentage,
       ]
     );

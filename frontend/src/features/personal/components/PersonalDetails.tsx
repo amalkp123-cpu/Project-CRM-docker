@@ -10,6 +10,7 @@ import EditDependantModal from "./patch/EditDependantModal";
 import { MdDelete } from "react-icons/md";
 import { MdEdit } from "react-icons/md";
 import { IoMdAdd } from "react-icons/io";
+import { MdContentCopy } from "react-icons/md";
 
 export default function PersonalDetails() {
   const { id } = useParams();
@@ -200,6 +201,15 @@ export default function PersonalDetails() {
     }
   };
 
+  const copyClientId = async (clientId: string) => {
+    try {
+      await navigator.clipboard.writeText(clientId);
+      alert("Copied UUID to clipboard");
+    } catch {
+      alert("Clipboard blocked");
+    }
+  };
+
   const toCapital = (s: any) =>
     s
       .toLowerCase()
@@ -246,6 +256,13 @@ export default function PersonalDetails() {
           <div className={styles.header}>
             <h2 className={styles.title}>
               {client.first_name} {client.last_name}
+              <button
+                className={styles.editBtn}
+                onClick={() => copyClientId(client.id)}
+                title="Copy Client UUID"
+              >
+                <MdContentCopy size={"1rem"} />
+              </button>
             </h2>
             <div className={styles.headerButtons}>
               {hideSpouse == 1 ? (
@@ -455,6 +472,44 @@ export default function PersonalDetails() {
                     >
                       Delete
                     </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* BUSINESSES */}
+          {client.businesses?.length > 0 && (
+            <div className={`${styles.section} ${styles.dependentSection}`}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Businesses</h3>
+              </div>
+
+              <div className={styles.blockContainer}>
+                {client.businesses.map((biz: any) => (
+                  <div key={biz.business_id} className={styles.blockWithDelete}>
+                    <div className={styles.block}>
+                      <span className={styles.tag}>{toCapital(biz.role)}</span>
+
+                      <div className={styles.blockTitle}>
+                        {biz.business_name}
+                      </div>
+
+                      <Field
+                        label="Ownership"
+                        value={`${biz.share_percentage}%`}
+                      />
+                    </div>
+
+                    <div className={styles.buttonContainer}>
+                      <button
+                        className={styles.editBtn}
+                        onClick={() => navigate(`/business/${biz.business_id}`)}
+                        title="Open business"
+                      >
+                        Open
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

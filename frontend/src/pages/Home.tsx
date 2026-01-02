@@ -69,7 +69,9 @@ const Home = () => {
             </div>
           </div>
           <div className={styles.tableContainer}>
-            {activeTab == "personal" && <PersonalTable search={search} />}
+            {activeTab == "personal" && (
+              <PersonalTable search={search} limit={10} />
+            )}
             {activeTab == "business" && <BusinessTable search={search} />}
           </div>
         </div>

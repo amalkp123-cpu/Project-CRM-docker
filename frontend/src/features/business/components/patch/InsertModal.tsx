@@ -38,6 +38,27 @@ const MONTHS = [
   "December",
 ];
 
+function isValidSIN(sin: string): boolean {
+  if (!/^\d{9}$/.test(sin)) return false;
+
+  let sum = 0;
+  let doubleDigit = false;
+
+  for (let i = sin.length - 1; i >= 0; i--) {
+    let digit = Number(sin[i]);
+
+    if (doubleDigit) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+
+    sum += digit;
+    doubleDigit = !doubleDigit;
+  }
+
+  return sum % 10 === 0;
+}
+
 export default function InsertBusinessResourceModal({
   visible,
   onClose,
@@ -78,6 +99,7 @@ export default function InsertBusinessResourceModal({
     dob: "",
     email: "",
     full_name: "",
+    sin: "",
     share_percentage: "",
   });
 
@@ -106,21 +128,40 @@ export default function InsertBusinessResourceModal({
         alert("First and last name required");
         return;
       }
+      if (!shareholderForm.dob) {
+        alert("Date of birth is required");
+        return;
+      }
+      if (!isValidSIN(shareholderForm.sin)) {
+        alert("Invalid SIN");
+        return;
+      }
+
       payload.personal_client = {
         first_name: shareholderForm.first_name,
         last_name: shareholderForm.last_name,
-        dob: shareholderForm.dob || null,
+        dob: shareholderForm.dob,
         email: shareholderForm.email || null,
+        sin: shareholderForm.sin,
       };
     }
 
     if (shareholderMode === "basic") {
       if (!shareholderForm.full_name) {
-        alert("Full name required");
+        alert("Full name is required");
+        return;
+      }
+      if (!shareholderForm.dob) {
+        alert("Date of birth is required");
+        return;
+      }
+      if (!isValidSIN(shareholderForm.sin)) {
+        alert("Invalid SIN");
         return;
       }
       payload.full_name = shareholderForm.full_name;
-      payload.dob = shareholderForm.dob || null;
+      payload.dob = shareholderForm.dob;
+      payload.sin = shareholderForm.sin;
     }
 
     setLoading(true);
@@ -541,7 +582,7 @@ export default function InsertBusinessResourceModal({
                 {shareholderMode === "new" && (
                   <>
                     <div className={styles.formField}>
-                      <label>First Name</label>
+                      <label>First Name *</label>
                       <input
                         value={shareholderForm.first_name}
                         onChange={(e) =>
@@ -554,13 +595,42 @@ export default function InsertBusinessResourceModal({
                     </div>
 
                     <div className={styles.formField}>
-                      <label>Last Name</label>
+                      <label>Last Name *</label>
                       <input
                         value={shareholderForm.last_name}
                         onChange={(e) =>
                           setShareholderForm({
                             ...shareholderForm,
                             last_name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formField}>
+                      <label>Date of Birth *</label>
+                      <input
+                        type="date"
+                        value={shareholderForm.dob}
+                        onChange={(e) =>
+                          setShareholderForm({
+                            ...shareholderForm,
+                            dob: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formField}>
+                      <label>SIN *</label>
+                      <input
+                        inputMode="numeric"
+                        placeholder="9-digit SIN"
+                        value={shareholderForm.sin}
+                        onChange={(e) =>
+                          setShareholderForm({
+                            ...shareholderForm,
+                            sin: e.target.value.replace(/\D/g, ""),
                           })
                         }
                       />
@@ -583,18 +653,49 @@ export default function InsertBusinessResourceModal({
 
                 {/* BASIC ONLY */}
                 {shareholderMode === "basic" && (
-                  <div className={styles.formField}>
-                    <label>Full Name</label>
-                    <input
-                      value={shareholderForm.full_name}
-                      onChange={(e) =>
-                        setShareholderForm({
-                          ...shareholderForm,
-                          full_name: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
+                  <>
+                    <div className={styles.formField}>
+                      <label>Full Name *</label>
+                      <input
+                        value={shareholderForm.full_name}
+                        onChange={(e) =>
+                          setShareholderForm({
+                            ...shareholderForm,
+                            full_name: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formField}>
+                      <label>Date of Birth *</label>
+                      <input
+                        type="date"
+                        value={shareholderForm.dob}
+                        onChange={(e) =>
+                          setShareholderForm({
+                            ...shareholderForm,
+                            dob: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formField}>
+                      <label>SIN *</label>
+                      <input
+                        inputMode="numeric"
+                        placeholder="9-digit SIN"
+                        value={shareholderForm.sin}
+                        onChange={(e) =>
+                          setShareholderForm({
+                            ...shareholderForm,
+                            sin: e.target.value.replace(/\D/g, ""),
+                          })
+                        }
+                      />
+                    </div>
+                  </>
                 )}
 
                 {/* COMMON */}
@@ -602,13 +703,17 @@ export default function InsertBusinessResourceModal({
                   <label>Share Percentage *</label>
                   <input
                     type="number"
+                    max={100}
+                    step="0.01"
                     value={shareholderForm.share_percentage}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (Number(v) > 100) return; // hard stop
                       setShareholderForm({
                         ...shareholderForm,
-                        share_percentage: e.target.value,
-                      })
-                    }
+                        share_percentage: v,
+                      });
+                    }}
                   />
                 </div>
 

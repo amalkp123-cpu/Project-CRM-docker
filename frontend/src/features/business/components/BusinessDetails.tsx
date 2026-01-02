@@ -277,32 +277,26 @@ export default function BusinessDetails() {
                 {shareholders.map((sh: any) => {
                   const isStandalone = !sh.client_id;
 
-                  const displayName = sh.client_id
-                    ? [sh.client_first_name, sh.client_last_name]
-                        .filter(Boolean)
-                        .join(" ")
-                    : sh.full_name;
-
-                  const displayDob = isStandalone ? sh.dob : sh.client_dob;
-
                   return (
                     <div key={sh.id} className={styles.blockWithDelete}>
                       <div className={styles.block}>
-                        {/* TYPE TAG */}
+                        {/* TYPE */}
                         <span className={styles.tag}>
                           {isStandalone ? "Standalone" : "Personal Client"}
                         </span>
 
                         {/* NAME */}
                         <div className={styles.blockTitle}>
-                          {displayName || "—"}
+                          {sh.full_name || "—"}
                         </div>
 
                         {/* DETAILS */}
                         <Field
                           label="DOB"
-                          value={displayDob ? formatDate(displayDob) : "—"}
+                          value={sh.dob ? formatDate(sh.dob) : "—"}
                         />
+
+                        <Field label="SIN" value={sh.sin_original} />
 
                         <Field
                           label="Share %"
@@ -310,7 +304,7 @@ export default function BusinessDetails() {
                         />
 
                         <Field
-                          label="Client Link"
+                          label="Linked Client"
                           value={isStandalone ? "No" : "Yes"}
                         />
                       </div>
@@ -320,10 +314,9 @@ export default function BusinessDetails() {
                         {!isStandalone && (
                           <button
                             className={styles.editBtn}
-                            onClick={() => {
-                              navigate(`/personal/${sh.client_id}`);
-                            }}
-                            title="Open personal client"
+                            onClick={() =>
+                              navigate(`/personal/${sh.client_id}`)
+                            }
                           >
                             Open
                           </button>
@@ -332,7 +325,6 @@ export default function BusinessDetails() {
                         <button
                           className={styles.deleteItemBtn}
                           onClick={() => handleDeleteShareholder(sh.id)}
-                          title="Remove shareholder"
                         >
                           Delete
                         </button>

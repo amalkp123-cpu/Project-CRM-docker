@@ -25,6 +25,7 @@ interface PersonalTableProps {
   status?: string;
   filters?: Record<number, string | number | undefined>;
   filterFn?: (row: Row) => boolean;
+  limit?: number;
   data?: Row[];
 }
 
@@ -43,7 +44,7 @@ const getData = async (): Promise<Row[]> => {
   try {
     const token = localStorage.getItem("token");
 
-    const response = await fetch(`${API_URL}/api/pClient/`, {
+    const response = await fetch(`${API_URL}/api/pClient/?limit=0`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -86,6 +87,7 @@ const getData = async (): Promise<Row[]> => {
 const PersonalTable: React.FC<PersonalTableProps> = ({
   search = "",
   filterFn,
+  limit,
   data,
 }) => {
   const navigate = useNavigate();
@@ -194,57 +196,59 @@ const PersonalTable: React.FC<PersonalTableProps> = ({
             </td>
           </tr>
         ) : (
-          filtered.map((row, rIdx) => (
-            <tr
-              key={rIdx}
-              className={styles.rowClickable}
-              onClick={() => goToClient(row[0])}
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  goToClient(row[0]);
-                }
-              }}
-              role="link"
-              aria-label={`Open client ${row[1] ?? row[0]}`}
-            >
-              {/* Client Name */}
-              <td className={styles.tableCell}>{row[1]}</td>
-              {/* Status */}
-              <td
-                className={`${styles.tableCell} ${styles.statusCell} ${
-                  styles[row[2].toLowerCase()]
-                }`}
-              >
-                <span>{row[2]}</span>
-              </td>
-              {/* Phone */}
-              <td className={styles.tableCell}>{row[3]}</td>
-              {/* Email */}
-              <td className={styles.tableCell}>{row[4]}</td>
-              {/* Last Filed */}
-              <td className={styles.tableCell}>{row[5]}</td>
-              {/* Tax Year */}
-              <td className={styles.tableCell}>{row[6]}</td>
-              {/* Spouse */}
-              <td className={styles.tableCell}>{row[7]}</td>
-              {/* Action Button */}
-              <td className={styles.tableCell}>
-                <button
-                  type="button"
-                  className={styles.viewBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
+          filtered
+            .slice(0, limit ? limit : filtered.length)
+            .map((row, rIdx) => (
+              <tr
+                key={rIdx}
+                className={styles.rowClickable}
+                onClick={() => goToClient(row[0])}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
                     goToClient(row[0]);
-                  }}
-                  aria-label={`View details for ${row[1] ?? row[0]}`}
+                  }
+                }}
+                role="link"
+                aria-label={`Open client ${row[1] ?? row[0]}`}
+              >
+                {/* Client Name */}
+                <td className={styles.tableCell}>{row[1]}</td>
+                {/* Status */}
+                <td
+                  className={`${styles.tableCell} ${styles.statusCell} ${
+                    styles[row[2].toLowerCase()]
+                  }`}
                 >
-                  View details
-                </button>
-              </td>
-            </tr>
-          ))
+                  <span>{row[2]}</span>
+                </td>
+                {/* Phone */}
+                <td className={styles.tableCell}>{row[3]}</td>
+                {/* Email */}
+                <td className={styles.tableCell}>{row[4]}</td>
+                {/* Last Filed */}
+                <td className={styles.tableCell}>{row[5]}</td>
+                {/* Tax Year */}
+                <td className={styles.tableCell}>{row[6]}</td>
+                {/* Spouse */}
+                <td className={styles.tableCell}>{row[7]}</td>
+                {/* Action Button */}
+                <td className={styles.tableCell}>
+                  <button
+                    type="button"
+                    className={styles.viewBtn}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      goToClient(row[0]);
+                    }}
+                    aria-label={`View details for ${row[1] ?? row[0]}`}
+                  >
+                    View details
+                  </button>
+                </td>
+              </tr>
+            ))
         )}
       </tbody>
     </table>

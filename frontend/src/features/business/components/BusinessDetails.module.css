@@ -95,7 +95,7 @@
 .blockWithDelete {
   display: flex;
   flex-direction: column;
-  min-width: 13rem;
+  min-width: 15rem;
   max-width: 50%;
   justify-content: space-between;
   gap: 0.8rem;

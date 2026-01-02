@@ -35,6 +35,12 @@
   font-weight: 600;
 }
 
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .section {
   display: flex;
   flex-direction: column;
@@ -204,7 +210,7 @@ td .buttonContainer {
 .editBtn {
   background-color: inherit;
   color: #4a6fa5;
-  padding: 0 0.8rem;
+  padding: 0.4rem 0.8rem;
 }
 
 .editBtn:hover {
