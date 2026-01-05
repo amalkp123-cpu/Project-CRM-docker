@@ -27,5 +27,5 @@ COPY backend/ ./
 # copy built frontend into backend public folder
 COPY --from=frontend_builder /app/frontend/dist ./public
 
-EXPOSE 4000
+EXPOSE 3001
 CMD ["node", "index.js"]

@@ -98,7 +98,6 @@ CREATE TABLE IF NOT EXISTS public.tax_records (
     UNIQUE (client_id, tax_year)
 );
 
-
 -- =========================
 -- notes & verifications (individual)
 -- =========================
@@ -148,6 +147,24 @@ CREATE TABLE IF NOT EXISTS public.business_clients (
     updated_at timestamptz DEFAULT now()
 );
 
+-- =========================
+-- business notes (FIXED)
+-- =========================
+
+CREATE TABLE IF NOT EXISTS public.business_notes (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    business_id uuid NOT NULL
+        REFERENCES public.business_clients(id) ON DELETE CASCADE,
+    note_text text NOT NULL,
+    created_by uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- =========================
+-- documents
+-- =========================
+
 CREATE TABLE IF NOT EXISTS public.hst_docs (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     client_id uuid NULL
@@ -193,17 +210,13 @@ CREATE TABLE IF NOT EXISTS public.business_shareholders (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     business_id uuid NOT NULL
         REFERENCES public.business_clients(id) ON DELETE CASCADE,
-
     full_name text,
     dob date,
     share_percentage numeric(5,2)
         CHECK (share_percentage >= 0 AND share_percentage <= 100),
-
     sin_encrypted text,
     sin_hash text,
-
     client_id uuid REFERENCES public.clients(id) ON DELETE SET NULL,
-
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now()
 );
@@ -216,20 +229,15 @@ CREATE TABLE IF NOT EXISTS public.business_tax_profiles (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     business_id uuid NOT NULL
         REFERENCES public.business_clients(id) ON DELETE CASCADE,
-
     tax_type text NOT NULL
         CHECK (tax_type IN ('HST','CORPORATION','PAYROLL','WSIB','AUDIT','ANNUAL_RENEWAL')),
-
     frequency text
         CHECK (frequency IN ('monthly','quarterly','yearly')),
-
     start_date date,
     start_year smallint,
     start_quarter smallint CHECK (start_quarter BETWEEN 1 AND 4),
-
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
-
     UNIQUE (business_id, tax_type)
 );
 
@@ -241,42 +249,35 @@ CREATE TABLE IF NOT EXISTS public.business_tax_records (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     business_id uuid NOT NULL
         REFERENCES public.business_clients(id) ON DELETE CASCADE,
-
     tax_type text NOT NULL
         CHECK (tax_type IN ('HST','CORPORATION','PAYROLL','WSIB','AUDIT','ANNUAL_RENEWAL')),
-
     tax_year smallint NOT NULL,
     tax_period text,
-    tax_date date NULL,
+    tax_date date,
     amount numeric(12,2),
-
     confirmation_number text,
     status text,
-
+    from_date date,
+    to_date date,
     created_by uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
-
     UNIQUE (business_id, tax_type, tax_year, tax_period)
 );
 
 -- =========================
--- business tax notes (NEW)
+-- business tax notes
 -- =========================
 
 CREATE TABLE IF NOT EXISTS public.business_tax_notes (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-
     business_tax_record_id uuid NOT NULL
         REFERENCES public.business_tax_records(id) ON DELETE CASCADE,
-
     note_text text NOT NULL,
-
     created_by uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now()
 );
-
 
 -- =========================
 -- indexes
@@ -290,7 +291,8 @@ CREATE INDEX IF NOT EXISTS idx_clients_sin_hash
 
 CREATE INDEX IF NOT EXISTS idx_addresses_client
   ON public.addresses(client_id);
-  CREATE INDEX IF NOT EXISTS idx_addresses_business_client
+
+CREATE INDEX IF NOT EXISTS idx_addresses_business
   ON public.business_addresses(business_id);
 
 CREATE INDEX IF NOT EXISTS idx_dependants_client
@@ -307,6 +309,9 @@ CREATE INDEX IF NOT EXISTS idx_hst_docs_tax_record
 
 CREATE INDEX IF NOT EXISTS idx_notes_client
   ON public.notes(client_id);
+
+CREATE INDEX IF NOT EXISTS idx_business_notes_business
+  ON public.business_notes(business_id);
 
 CREATE INDEX IF NOT EXISTS idx_verifications_entity
   ON public.verifications(entity_type, entity_id);
@@ -335,42 +340,35 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_clients_updated_at ON public.clients;
-CREATE TRIGGER trg_clients_updated_at
+CREATE OR REPLACE TRIGGER trg_clients_updated_at
 BEFORE UPDATE ON public.clients
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_notes_updated_at ON public.notes;
-CREATE TRIGGER trg_notes_updated_at
+CREATE OR REPLACE TRIGGER trg_notes_updated_at
 BEFORE UPDATE ON public.notes
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_business_clients_updated_at ON public.business_clients;
-CREATE TRIGGER trg_business_clients_updated_at
+CREATE OR REPLACE TRIGGER trg_business_clients_updated_at
 BEFORE UPDATE ON public.business_clients
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_business_shareholders_updated_at
-  ON public.business_shareholders;
-CREATE TRIGGER trg_business_shareholders_updated_at
+CREATE OR REPLACE TRIGGER trg_business_notes_updated_at
+BEFORE UPDATE ON public.business_notes
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE OR REPLACE TRIGGER trg_business_shareholders_updated_at
 BEFORE UPDATE ON public.business_shareholders
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_business_tax_profiles_updated_at
-  ON public.business_tax_profiles;
-CREATE TRIGGER trg_business_tax_profiles_updated_at
+CREATE OR REPLACE TRIGGER trg_business_tax_profiles_updated_at
 BEFORE UPDATE ON public.business_tax_profiles
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_business_tax_records_updated_at
-  ON public.business_tax_records;
-CREATE TRIGGER trg_business_tax_records_updated_at
+CREATE OR REPLACE TRIGGER trg_business_tax_records_updated_at
 BEFORE UPDATE ON public.business_tax_records
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_business_tax_notes_updated_at
-  ON public.business_tax_notes;
-CREATE TRIGGER trg_business_tax_notes_updated_at
+CREATE OR REPLACE TRIGGER trg_business_tax_notes_updated_at
 BEFORE UPDATE ON public.business_tax_notes
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 

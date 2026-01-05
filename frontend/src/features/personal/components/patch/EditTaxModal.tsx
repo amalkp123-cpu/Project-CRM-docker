@@ -235,7 +235,11 @@ export default function EditTaxModal({
             >
               Cancel
             </button>
-            <button type="submit" disabled={isSubmitting}>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={styles.submitButton}
+            >
               {isSubmitting ? "Saving..." : "Save Changes"}
             </button>
           </div>

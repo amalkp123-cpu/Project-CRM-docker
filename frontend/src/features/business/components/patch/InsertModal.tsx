@@ -3,7 +3,7 @@ import styles from "./InsertModal.module.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-type TaxType = "HST" | "CORPORATION" | "PAYROLL" | "WSIB";
+type TaxType = "HST" | "CORPORATION" | "PAYROLL" | "WSIB" | "ANNUAL_RENEWAL";
 
 interface BusinessTaxForm {
   taxYear: string;
@@ -12,6 +12,13 @@ interface BusinessTaxForm {
   confirmationNumber: string;
   status: "Pending" | "Filed" | "Paid";
   taxDate: string;
+  fromDate?: string;
+  toDate?: string;
+}
+
+interface Note {
+  note: string;
+  createdBy?: string;
 }
 
 interface Props {
@@ -67,7 +74,10 @@ export default function InsertBusinessResourceModal({
   onSuccess,
   user,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"tax" | "shareholders">("tax");
+  const [activeTab, setActiveTab] = useState<"tax" | "shareholders" | "notes">(
+    "tax"
+  );
+
   const [activeTaxTab, setActiveTaxTab] = useState<TaxType>("HST");
   const [activeProfile, setActiveProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -85,6 +95,8 @@ export default function InsertBusinessResourceModal({
     confirmationNumber: "",
     status: "Pending",
     taxDate: "",
+    fromDate: "",
+    toDate: "",
   });
 
   type ShareholderMode = "existing" | "new" | "basic";
@@ -101,6 +113,11 @@ export default function InsertBusinessResourceModal({
     full_name: "",
     sin: "",
     share_percentage: "",
+  });
+
+  const [noteForm, setNoteForm] = useState<Note>({
+    note: "",
+    createdBy: user?.id || "",
   });
 
   const handleCreateShareholder = async () => {
@@ -190,6 +207,41 @@ export default function InsertBusinessResourceModal({
     }
   };
 
+  const handleAddNote = async () => {
+    if (!noteForm.note) {
+      alert("A note is required");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${API_URL}/api/bClient/${businessId}/notes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(noteForm),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to add note");
+      }
+
+      alert("Note added successfully");
+      setNoteForm({ note: "", createdBy: user?.id || "" });
+      onSuccess();
+      handleClose();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   function getEffectiveFrequency(profile: any, taxType: TaxType) {
     if (!profile) return null;
     if (taxType === "WSIB") return "quarterly";
@@ -243,6 +295,8 @@ export default function InsertBusinessResourceModal({
       confirmationNumber: "",
       status: "Pending",
       taxDate: "",
+      fromDate: "",
+      toDate: "",
     });
     setTaxRecordCreated(false);
     setCreatedTaxRecordId(null);
@@ -279,6 +333,8 @@ export default function InsertBusinessResourceModal({
         confirmation_number: form.confirmationNumber || null,
         status: form.status,
         created_by: user?.id || null,
+        from_date: form.fromDate || null,
+        to_date: form.toDate || null,
       };
 
       const res = await fetch(
@@ -351,6 +407,37 @@ export default function InsertBusinessResourceModal({
     }
   };
 
+  function getPrimaryAction() {
+    if (activeTab === "notes") {
+      return {
+        label: "Add Note",
+        onClick: handleAddNote,
+      };
+    }
+
+    if (activeTab === "shareholders") {
+      return {
+        label: "Add Shareholder",
+        onClick: handleCreateShareholder,
+      };
+    }
+
+    // tax tab
+    if (taxRecordCreated) {
+      return {
+        label: "Upload Document",
+        onClick: handleUploadDocument,
+      };
+    }
+
+    return {
+      label: "Create Tax Record",
+      onClick: handleSubmit,
+    };
+  }
+
+  const primaryAction = getPrimaryAction();
+
   if (!visible) return null;
 
   /* ================= RENDER ================= */
@@ -378,11 +465,19 @@ export default function InsertBusinessResourceModal({
           >
             Tax Record
           </button>
+
           <button
             className={activeTab === "shareholders" ? styles.activeTab : ""}
             onClick={() => setActiveTab("shareholders")}
           >
             Shareholders
+          </button>
+
+          <button
+            className={activeTab === "notes" ? styles.activeTab : ""}
+            onClick={() => setActiveTab("notes")}
+          >
+            Notes
           </button>
         </div>
 
@@ -392,7 +487,15 @@ export default function InsertBusinessResourceModal({
               {!taxRecordCreated ? (
                 <>
                   <div className={styles.tabs}>
-                    {(["HST", "CORPORATION", "PAYROLL", "WSIB"] as TaxType[])
+                    {(
+                      [
+                        "HST",
+                        "CORPORATION",
+                        "PAYROLL",
+                        "WSIB",
+                        "ANNUAL_RENEWAL",
+                      ] as TaxType[]
+                    )
                       .filter((t) => taxProfiles.some((p) => p.tax_type === t))
                       .map((t) => (
                         <button
@@ -450,6 +553,40 @@ export default function InsertBusinessResourceModal({
                           </select>
                         </div>
                       )}
+
+                      {activeTaxTab === "HST" &&
+                        activeProfile.frequency === "quarterly" && (
+                          <>
+                            <div className={styles.formField}>
+                              <label>From Date *</label>
+                              <input
+                                type="date"
+                                value={form.fromDate}
+                                onChange={(e) =>
+                                  setForm({
+                                    ...form,
+                                    fromDate: e.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div className={styles.formField}>
+                              <label>To Date *</label>
+                              <input
+                                type="date"
+                                value={form.toDate}
+                                onChange={(e) =>
+                                  setForm({
+                                    ...form,
+                                    toDate: e.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                          </>
+                        )}
+
                       {activeProfile?.frequency === "monthly" && (
                         <div className={styles.formField}>
                           <label>Month</label>
@@ -507,7 +644,7 @@ export default function InsertBusinessResourceModal({
                         />
                       </div>
                       <div className={styles.formField}>
-                        <label>Tax Date</label>
+                        <label>Filing Date</label>
                         <input
                           type="date"
                           value={form.taxDate}
@@ -716,15 +853,28 @@ export default function InsertBusinessResourceModal({
                     }}
                   />
                 </div>
-
-                <button
-                  type="button"
-                  className={styles.submitButton}
-                  onClick={handleCreateShareholder}
-                  disabled={loading}
-                >
-                  {loading ? "Saving…" : "Add Shareholder"}
-                </button>
+              </div>
+            </div>
+          )}
+          {activeTab === "notes" && (
+            <div className={styles.tabContent}>
+              <div className={styles.form}>
+                <h3>Add New Note</h3>
+                <div className={styles.formRow}>
+                  <div
+                    className={`${styles.formField} ${styles.textAreaField}`}
+                  >
+                    <textarea
+                      placeholder="Write your note here"
+                      className={styles.notesArea}
+                      value={noteForm.note}
+                      onChange={(e) =>
+                        setNoteForm({ ...noteForm, note: e.target.value })
+                      }
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -740,38 +890,25 @@ export default function InsertBusinessResourceModal({
             Cancel
           </button>
 
-          {activeTab === "tax" && activeProfile && !taxRecordCreated && (
+          {activeTab === "tax" && taxRecordCreated && (
             <button
               type="button"
-              className={styles.submitButton}
-              onClick={handleSubmit}
+              className={styles.secondaryButton}
+              onClick={handleSkipUpload}
               disabled={loading}
             >
-              {loading ? "Processing…" : "Create Tax Record"}
+              Skip for now
             </button>
           )}
 
-          {activeTab === "tax" && activeProfile && taxRecordCreated && (
-            <>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={handleSkipUpload}
-                disabled={loading}
-              >
-                Skip for now
-              </button>
-
-              <button
-                type="button"
-                className={styles.submitButton}
-                onClick={handleUploadDocument}
-                disabled={loading}
-              >
-                {loading ? "Uploading…" : "Upload Document"}
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            className={styles.submitButton}
+            onClick={primaryAction.onClick}
+            disabled={loading}
+          >
+            {loading ? "Processing…" : primaryAction.label}
+          </button>
         </div>
       </div>
     </div>

@@ -783,7 +783,6 @@ async function createPersonal(req, res) {
       ? insertedAddressIds[0]
       : null;
 
-    // 2) Insert addresses and collect inserted ids
     const notes = Array.isArray(payload.notes) ? payload.notes : [];
 
     for (let i = 0; i < notes.length; i++) {

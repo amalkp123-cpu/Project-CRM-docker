@@ -30,6 +30,8 @@ export default function PersonalDetails() {
   );
   const [patchSaving, setPatchSaving] = useState(false);
 
+  const [showAllNotes, setShowAllNotes] = useState(false);
+
   // Edit modal states
   const [editTaxModalVisible, setEditTaxModalVisible] = useState(false);
   const [editDependantModalVisible, setEditDependantModalVisible] =
@@ -445,36 +447,55 @@ export default function PersonalDetails() {
             </div>
           )}
 
-          {/* NOTES WITH DELETE BUTTONS */}
-          {client.notes?.length !== 0 && (
+          {/* NOTES (TABLE, LAST 5) */}
+          {client.notes?.length > 0 && (
             <div className={styles.section}>
               <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>Notes</h3>
               </div>
-              <div className={styles.blockContainer}>
-                {client.notes.map((note: any) => (
-                  <div
-                    key={note.id}
-                    className={`${styles.blockWithDelete} ${styles.noteBlock}`}
-                  >
-                    <div className={styles.block}>
-                      <div>{note.note_text}</div>
-                      <div className={styles.italicTag}>
-                        -{note.created_by}
-                        <br />
-                        {formatDate(note.created_at)}
-                      </div>
-                    </div>
-                    <button
-                      className={styles.deleteItemBtn}
-                      onClick={() => handleDeleteNote(note.id)}
-                      title="Delete Note"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
+
+              <div className={styles.tableContainer}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Note</th>
+                      <th>Created By</th>
+                      <th>Date</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(showAllNotes
+                      ? client.notes
+                      : client.notes.slice(0, 5)
+                    ).map((note: any) => (
+                      <tr key={note.id}>
+                        <td>{note.note_text}</td>
+                        <td>{note.created_by}</td>
+                        <td>{formatDate(note.created_at)}</td>
+                        <td>
+                          <button
+                            className={styles.deleteBtn}
+                            onClick={() => handleDeleteNote(note.id)}
+                            title="Delete note"
+                          >
+                            <MdDelete size="1rem" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+
+              {client.notes.length > 5 && (
+                <button
+                  className={styles.editBtn}
+                  onClick={() => setShowAllNotes(!showAllNotes)}
+                >
+                  {showAllNotes ? "Show less" : "Show more"}
+                </button>
+              )}
             </div>
           )}
 

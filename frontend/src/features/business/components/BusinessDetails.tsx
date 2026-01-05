@@ -32,6 +32,9 @@ export default function BusinessDetails() {
   const [addresses, setAddresses]: any[] = useState([]);
   const [shareholders, setShareholders]: any[] = useState([]);
   const [taxProfiles, setTaxProfiles]: any[] = useState([]);
+  const [relatedBusinesses, setRelatedBusinesses]: any[] = useState([]);
+  const [showAllNotes, setShowAllNotes] = useState(false);
+  const [notes, setNotes]: any[] = useState([]);
 
   const [activeTaxType, setActiveTaxType] = useState<string | null>(null);
 
@@ -97,6 +100,8 @@ export default function BusinessDetails() {
       );
       setShareholders(data.shareholders || []);
       setTaxProfiles(data.tax_profiles || []);
+      setRelatedBusinesses(data.relatedBusinesses || []);
+      setNotes(data.notes || []);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -185,6 +190,25 @@ export default function BusinessDetails() {
     }
   }
 
+  async function handleDeleteNote(noteId: string) {
+    if (!confirm("Delete this note?")) return;
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${API_URL}/api/bClient/${id}/notes/${noteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      fetchBusiness();
+    } catch (e: any) {
+      alert(e.message || "Delete failed");
+    }
+  }
+
   if (loading) return <div className={styles.loading}>Loading…</div>;
   if (err) return <div className={styles.error}>{err}</div>;
   if (!business) return <div className={styles.notFound}>Not found</div>;
@@ -233,37 +257,96 @@ export default function BusinessDetails() {
             <Grid>
               <Field label="Business Number" value={business.business_number} />
               <Field label="Type" value={business.business_type} />
-              <Field label="Phone" value={business.phone_cell} />
-              <Field label="Email" value={business.email} />
+              <Field
+                label="Incorporation Date"
+                value={formatDate(business.incorporation_date)}
+              />
+              <Field
+                label="Jurisdiction"
+                value={business.incorporation_jurisdiction}
+              />
+              <Field
+                label="Fiscal Year End"
+                value={formatDate(business.fiscal_year_end)}
+              />
+              <Field
+                label="Ontario Corp #"
+                value={business.ontario_corp_number}
+              />
+              <Field label="Phone (Cell)" value={business.phone_cell} />
+              <Field label="Phone (Home)" value={business.phone_home} />
+              <Field label="Phone (Work)" value={business.phone_work} />
               <Field label="Fax" value={business.fax} />
+              <Field label="Email" value={business.email} />
+              <Field
+                label="Loyalty Since"
+                value={formatDate(business.loyalty_since)}
+              />
+              <Field label="Referred By" value={business.referred_by} />
             </Grid>
           </Section>
 
           {/* ================= ADDRESSES ================= */}
-          {primaryAddress && (
-            <Section title="Primary Address">
-              <Grid>
-                <Field label="Line 1" value={primaryAddress.address_line1} />
-                <Field label="Line 2" value={primaryAddress.address_line2} />
-                <Field label="City" value={primaryAddress.city} />
-                <Field label="Province" value={primaryAddress.province} />
-                <Field label="Postal" value={primaryAddress.postal_code} />
-                <Field label="Country" value={primaryAddress.country} />
-              </Grid>
-            </Section>
-          )}
+          {(primaryAddress || mailingAddress) && (
+            <div className={styles.addressContainer}>
+              {primaryAddress && (
+                <Section
+                  title="Primary Address"
+                  className={styles.addressSection}
+                >
+                  <div className={styles.addressLine}>
+                    <span className={styles.addressTop}>
+                      {[
+                        primaryAddress.address_line1,
+                        primaryAddress.address_line2,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                    <br />
+                    <span className={styles.addressBottom}>
+                      {[
+                        primaryAddress.city,
+                        primaryAddress.province,
+                        primaryAddress.postal_code,
+                        primaryAddress.country,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  </div>
+                </Section>
+              )}
 
-          {mailingAddress && (
-            <Section title="Mailing Address">
-              <Grid>
-                <Field label="Line 1" value={mailingAddress.address_line1} />
-                <Field label="Line 2" value={mailingAddress.address_line2} />
-                <Field label="City" value={mailingAddress.city} />
-                <Field label="Province" value={mailingAddress.province} />
-                <Field label="Postal" value={mailingAddress.postal_code} />
-                <Field label="Country" value={mailingAddress.country} />
-              </Grid>
-            </Section>
+              {mailingAddress && (
+                <Section
+                  title="Mailing Address"
+                  className={styles.addressSection}
+                >
+                  <div className={styles.addressLine}>
+                    <span className={styles.addressTop}>
+                      {[
+                        mailingAddress.address_line1,
+                        mailingAddress.address_line2,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                    <br />
+                    <span className={styles.addressBottom}>
+                      {[
+                        mailingAddress.city,
+                        mailingAddress.province,
+                        mailingAddress.postal_code,
+                        mailingAddress.country,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  </div>
+                </Section>
+              )}
+            </div>
           )}
 
           {/* ================= SHAREHOLDERS ================= */}
@@ -332,6 +415,49 @@ export default function BusinessDetails() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* ================= RELATED BUSINESSES ================= */}
+          {relatedBusinesses.length > 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Related Businesses</h3>
+              </div>
+
+              <div className={styles.blockContainer}>
+                {relatedBusinesses.map((rb: any) => (
+                  <div key={rb.id} className={styles.blockWithDelete}>
+                    <div className={styles.block}>
+                      {/* TYPE TAG */}
+                      <span className={styles.tag}>Business</span>
+
+                      {/* NAME */}
+                      <div className={styles.blockTitle}>
+                        {rb.business_name || "—"}
+                      </div>
+
+                      {/* DETAILS */}
+                      <Field label="Business No." value={rb.business_number} />
+                      <Field label="Email" value={rb.email} />
+                      <Field
+                        label="Phone"
+                        value={rb.phone_cell || rb.phone || "—"}
+                      />
+                    </div>
+
+                    {/* ACTIONS */}
+                    <div className={styles.buttonContainer}>
+                      <button
+                        className={styles.editBtn}
+                        onClick={() => navigate(`/business/${rb.id}`)}
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -435,6 +561,18 @@ export default function BusinessDetails() {
                               <tr>
                                 <th>Year</th>
                                 <th>Period</th>
+
+                                {/* 👇 Show From/To columns ONLY for HST Quarterly */}
+                                {tp.tax_type === "HST" &&
+                                  tp.frequency &&
+                                  tp.frequency.toLowerCase() ===
+                                    "quarterly" && (
+                                    <>
+                                      <th>From</th>
+                                      <th>To</th>
+                                    </>
+                                  )}
+
                                 <th>Status</th>
                                 <th>Amount</th>
                                 <th>Date</th>
@@ -449,6 +587,26 @@ export default function BusinessDetails() {
                                 <tr key={r.id}>
                                   <td>{r.tax_year}</td>
                                   <td>{r.tax_period || "—"}</td>
+
+                                  {/* 👇 Match condition — show from/to dates */}
+                                  {tp.tax_type === "HST" &&
+                                    tp.frequency &&
+                                    tp.frequency.toLowerCase() ===
+                                      "quarterly" && (
+                                      <>
+                                        <td>
+                                          {r.from_date
+                                            ? formatDate(r.from_date)
+                                            : "—"}
+                                        </td>
+                                        <td>
+                                          {r.to_date
+                                            ? formatDate(r.to_date)
+                                            : "—"}
+                                        </td>
+                                      </>
+                                    )}
+
                                   <td>{r.status}</td>
                                   <td>{r.amount ?? "—"}</td>
                                   <td>{formatDate(r.tax_date)}</td>
@@ -499,6 +657,57 @@ export default function BusinessDetails() {
                     </div>
                   );
                 })}
+            </div>
+          )}
+
+          {/* ================= NOTES ================= */}
+          {notes.length > 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Notes</h3>
+              </div>
+
+              <div className={styles.tableContainer}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Note</th>
+                      <th>Created By</th>
+                      <th>Date</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(showAllNotes ? notes : notes.slice(0, 5)).map(
+                      (note: any) => (
+                        <tr key={note.id}>
+                          <td>{note.note_text}</td>
+                          <td>{note.created_by}</td>
+                          <td>{formatDate(note.created_at)}</td>
+                          <td>
+                            <button
+                              className={styles.deleteBtn}
+                              onClick={() => handleDeleteNote(note.id)}
+                              title="Delete note"
+                            >
+                              <MdDelete size="1rem" />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {notes.length > 5 && (
+                <button
+                  className={styles.editBtn}
+                  onClick={() => setShowAllNotes((v) => !v)}
+                >
+                  {showAllNotes ? "Show less" : "Show more"}
+                </button>
+              )}
             </div>
           )}
         </div>

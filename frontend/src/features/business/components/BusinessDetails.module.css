@@ -103,6 +103,34 @@
   border-radius: 1rem;
 }
 
+.addressContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rem; /* space between columns */
+  justify-content: start;
+  align-items: flex-start;
+}
+
+.addressSection {
+  flex: 1;
+  min-width: 250px; /* prevents squishing on small screens */
+}
+
+.addressLine {
+  color: #333;
+  line-height: 1.5;
+  margin-top: 0.8rem;
+}
+
+.addressTop {
+  display: inline-block;
+}
+
+.addressBottom {
+  display: inline-block;
+  opacity: 0.85;
+}
+
 .noteBlock {
   max-width: 100%;
 }

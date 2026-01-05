@@ -99,7 +99,10 @@ async function listClients(req, res) {
 async function createBusiness(req, res) {
   const payload = req.body || {};
   const createdBy = req.user?.id;
-  if (!createdBy) return res.status(401).json({ error: "unauthenticated" });
+
+  if (!createdBy) {
+    return res.status(401).json({ error: "unauthenticated" });
+  }
 
   const conn = await pool.connect();
 
@@ -107,7 +110,9 @@ async function createBusiness(req, res) {
     await conn.query("BEGIN");
     const now = new Date();
 
-    /* ---------- business_clients ---------- */
+    /* ============================================================
+       1. business_clients
+    ============================================================ */
     const bcRes = await conn.query(
       `
       INSERT INTO business_clients (
@@ -130,24 +135,28 @@ async function createBusiness(req, res) {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,
+        $8,$9,$10,$11,$12,
+        $13,$14,$15,$16,$17,$18
+      )
       RETURNING id
       `,
       [
         payload.businessName,
-        payload.businessNumber,
+        nullify(payload.businessNumber),
         payload.businessType,
-        payload.incorporationDate,
+        nullify(payload.incorporationDate),
         payload.incorporationJurisdiction,
-        payload.fiscalYearEnd,
-        payload.ontarioCorpNumber,
-        payload.phone1,
-        payload.phone2,
-        payload.phone3,
-        payload.fax,
+        nullify(payload.fiscalYearEnd),
+        nullify(payload.ontarioCorpNumber),
+        nullify(payload.phone1),
+        nullify(payload.phone2),
+        nullify(payload.phone3),
+        nullify(payload.fax),
         payload.email,
-        payload.loyaltySince,
-        payload.referredBy,
+        nullify(payload.loyaltySince),
+        nullify(payload.referredBy),
         createdBy,
         createdBy,
         now,
@@ -157,59 +166,64 @@ async function createBusiness(req, res) {
 
     const businessId = bcRes.rows[0].id;
 
-    /* ---------- business addresses ---------- */
+    /* ============================================================
+       2. business_addresses
+    ============================================================ */
     const addresses = Array.isArray(payload.addresses) ? payload.addresses : [];
 
-    for (let i = 0; i < addresses.length; i++) {
-      const a = addresses[i];
-      const isPrimary = i === 0;
-
-      for (const a of payload.addresses || []) {
-        await conn.query(
-          `
-    INSERT INTO business_addresses
-      (
-        business_id,
-        country,
-        province,
-        address_line1,
-        address_line2,
-        city,
-        postal_code,
-        is_primary,
-        is_mailing,
-        created_at
-      )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-    `,
-          [
-            businessId,
-            a.country || null,
-            a.province || null,
-            a.line1 || null,
-            a.line2 || null,
-            a.city || null,
-            a.postalCode || null,
-            a.is_primary === true,
-            a.is_mailing === true,
-            now,
-          ]
-        );
-      }
+    for (const a of addresses) {
+      await conn.query(
+        `
+        INSERT INTO business_addresses (
+          business_id,
+          country,
+          province,
+          address_line1,
+          address_line2,
+          city,
+          postal_code,
+          is_primary,
+          is_mailing,
+          created_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `,
+        [
+          businessId,
+          nullify(a.country),
+          nullify(a.province),
+          nullify(a.line1),
+          nullify(a.line2),
+          nullify(a.city),
+          nullify(a.postalCode),
+          a.is_primary === true,
+          a.is_mailing === true,
+          now,
+        ]
+      );
     }
 
-    /* ---------- shareholders ---------- */
+    /* ============================================================
+       3. business_shareholders
+    ============================================================ */
     for (const sh of payload.shareholders || []) {
       await conn.query(
         `
-        INSERT INTO business_shareholders
-          (business_id, full_name, dob, share_percentage, sin_encrypted, sin_hash, client_id)
+        INSERT INTO business_shareholders (
+          business_id,
+          full_name,
+          dob,
+          share_percentage,
+          sin_encrypted,
+          sin_hash,
+          client_id
+        )
         VALUES ($1,$2,$3,$4,$5,$6,$7)
         `,
         [
           businessId,
           sh.fullName,
-          sh.dob,
+          nullify(sh.dob),
           Number(sh.sharePercentage),
           sh.sin ? encrypt(sh.sin) : null,
           sh.sin ? sha256(sh.sin) : null,
@@ -218,58 +232,124 @@ async function createBusiness(req, res) {
       );
     }
 
-    /* ---------- tax profiles ---------- */
-    const profiles = [];
+    // Notes
 
+    const notes = Array.isArray(payload.notes) ? payload.notes : [];
+
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+
+      const notesSql = `
+        INSERT INTO business_notes
+          (business_id, note_text, created_by)
+        VALUES ($1,$2,$3)
+        RETURNING id
+      `;
+
+      const notesVals = [businessId, note, req.user?.id || null];
+
+      const r = await conn.query(notesSql, notesVals);
+    }
+
+    /* ============================================================
+       4. business_tax_profiles
+    ============================================================ */
+
+    const profiles = [];
+    const currentYear = new Date().getFullYear();
+
+    /* === HST === */
     if (payload.hstFrequency || payload.hstStartingDate) {
-      frequency = payload.hstFrequency?.toLowerCase();
+      const frequency = payload.hstFrequency
+        ? payload.hstFrequency.toLowerCase()
+        : "quarterly"; // default quarterly
 
       profiles.push({
         key: "hst",
-        frequency: frequency || null,
-        start_date: payload.hstStartingDate || null,
+        frequency,
+      });
+    } else {
+      // Default HST profile if none provided
+      profiles.push({
+        key: "hst",
+        frequency: "quarterly",
       });
     }
 
+    /* === CORPORATION === */
     if (payload.corpoStartingYear) {
       profiles.push({
         key: "corporate",
         start_year: payload.corpoStartingYear,
       });
+    } else {
+      profiles.push({
+        key: "corporate",
+        start_year: currentYear,
+      });
     }
 
+    /* === PAYROLL === */
     if (payload.payrollStartingYear) {
       profiles.push({
         key: "payroll",
         start_year: payload.payrollStartingYear,
+        frequency: "monthly",
+      });
+    } else {
+      profiles.push({
+        key: "payroll",
+        start_year: currentYear,
+        frequency: "monthly", // default monthly
       });
     }
 
+    /* === WSIB === */
     if (payload.wsibStartingYear || payload.wsibStartingQuarter) {
       profiles.push({
         key: "wsib",
-        start_year: payload.wsibStartingYear || null,
+        start_year: nullify(payload.wsibStartingYear),
         start_quarter: normalizeQuarter(payload.wsibStartingQuarter),
+        frequency: "quarterly",
+      });
+    } else {
+      profiles.push({
+        key: "wsib",
+        start_year: currentYear,
+        start_quarter: 1,
+        frequency: "quarterly", // default quarterly
       });
     }
 
+    /* === ANNUAL RENEWAL === */
     if (payload.annualRenewalDate) {
       profiles.push({
         key: "annualRenewal",
-        start_date: payload.annualRenewalDate,
+        start_date: nullify(payload.annualRenewalDate),
       });
     }
 
+    /* === INSERT INTO DB === */
     for (const p of profiles) {
       const dbTaxType = TAX_TYPE_MAP[p.key];
-      if (!dbTaxType) throw new Error(`invalid_tax_type: ${p.key}`);
+      if (!dbTaxType) {
+        throw new Error(`invalid_tax_type:${p.key}`);
+      }
 
       await conn.query(
         `
-        INSERT INTO business_tax_profiles
-          (business_id, tax_type, frequency, start_date, start_year, start_quarter, created_at, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-        `,
+    INSERT INTO business_tax_profiles (
+      business_id,
+      tax_type,
+      frequency,
+      start_date,
+      start_year,
+      start_quarter,
+      created_at,
+      updated_at
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `,
         [
           businessId,
           dbTaxType,
@@ -284,11 +364,11 @@ async function createBusiness(req, res) {
     }
 
     await conn.query("COMMIT");
-    res.status(201).json({ id: businessId });
+    return res.status(201).json({ id: businessId });
   } catch (err) {
     await conn.query("ROLLBACK");
     console.error("createBusiness:", err);
-    res.status(500).json({ error: "server_error" });
+    return res.status(500).json({ error: "server_error" });
   } finally {
     conn.release();
   }
@@ -400,6 +480,32 @@ async function getBusiness(req, res) {
       };
     });
 
+    /* ================= RELATED BUSINESSES ================= */
+    const clientIds = shareholders
+      .filter((sh) => sh.client_id)
+      .map((sh) => sh.client_id);
+
+    let relatedBusinesses = [];
+    if (clientIds.length) {
+      const relatedRes = await pool.query(
+        `
+        SELECT DISTINCT
+          bc.id,
+          bc.business_name,
+          bc.business_number,
+          bc.email,
+          bc.phone_cell
+        FROM business_clients bc
+        JOIN business_shareholders bs ON bs.business_id = bc.id
+        WHERE bs.client_id = ANY($1)
+          AND bc.id != $2
+        ORDER BY bc.business_name ASC
+        `,
+        [clientIds, businessId]
+      );
+      relatedBusinesses = relatedRes.rows;
+    }
+
     /* ================= TAX PROFILES ================= */
     const taxProfilesRes = await pool.query(
       `
@@ -456,6 +562,21 @@ async function getBusiness(req, res) {
       [businessId]
     );
 
+    /* ================= NOTES ================= */
+
+    const notesRes = await pool.query(
+      `SELECT 
+    nt.id AS id, 
+    nt.created_at AS created_at, 
+    nt.note_text AS note_text,
+    au.full_name AS created_by
+FROM business_notes nt
+LEFT JOIN app_users au ON nt.created_by = au.id
+WHERE nt.business_id = $1
+ORDER BY nt.created_at DESC`,
+      [businessId]
+    );
+
     /* ================= HYDRATION ================= */
 
     const docsByRecord = {};
@@ -489,7 +610,9 @@ async function getBusiness(req, res) {
       business,
       addresses: addrRes.rows,
       shareholders,
+      relatedBusinesses,
       tax_profiles: taxProfiles,
+      notes: notesRes.rows,
     });
   } catch (err) {
     console.error("getBusiness:", err);
@@ -704,6 +827,8 @@ async function createTaxRecord(req, res) {
     confirmation_number,
     status,
     created_by,
+    from_date,
+    to_date,
   } = req.body;
 
   if (!businessId || !tax_type || !tax_year) {
@@ -750,8 +875,7 @@ async function createTaxRecord(req, res) {
     /* ---------- insert ---------- */
     const { rows } = await conn.query(
       `
-      INSERT INTO business_tax_records
-      (
+      INSERT INTO business_tax_records (
         business_id,
         tax_type,
         tax_year,
@@ -760,9 +884,13 @@ async function createTaxRecord(req, res) {
         amount,
         confirmation_number,
         status,
-        created_by
+        from_date,
+        to_date,
+        created_by,
+        created_at,
+        updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
       RETURNING *
       `,
       [
@@ -773,8 +901,10 @@ async function createTaxRecord(req, res) {
         tax_period ?? null,
         amount ?? null,
         confirmation_number ?? null,
-        status ?? "pending",
-        created_by ?? req.user.id, // MUST be a UUID
+        status ?? null,
+        from_date ?? null,
+        to_date ?? null,
+        created_by ?? req.user.id,
       ]
     );
 
@@ -1085,6 +1215,85 @@ async function deleteBusinessShareholder(req, res) {
   }
 }
 
+//Note Controllers
+
+async function insertNote(req, res) {
+  const businessId = req.params.businessId;
+  const note = req.body.note;
+  const userId = req.user?.id;
+
+  const conn = await pool.connect();
+  try {
+    await conn.query("BEGIN");
+
+    // Verify business exists
+    const businessCheck = await conn.query(
+      "SELECT id FROM business_clients WHERE id = $1",
+      [businessId]
+    );
+    if (!businessCheck.rows.length) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({ error: "business_not_found" });
+    }
+
+    // Insert new address
+    const result = await conn.query(
+      `INSERT INTO business_notes 
+       (business_id, note_text, created_by)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [businessId, note, userId]
+    );
+
+    await conn.query("COMMIT");
+    return res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await conn.query("ROLLBACK");
+    console.error("insertNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
+async function deleteNote(req, res) {
+  const businessId = req.params.businessId;
+  const NoteId = req.params.noteId;
+
+  if (!NoteId) {
+    return res.status(400).json({ error: "note_id_required" });
+  }
+
+  try {
+    const result = await pool.query(
+      "DELETE FROM business_notes WHERE id = $1 AND business_id = $2 RETURNING id",
+      [NoteId, businessId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "note_not_found",
+        message: "note not found or does not belong to this business",
+      });
+    }
+
+    return res.json({
+      success: true,
+      id: NoteId,
+      message: "note deleted successfully",
+    });
+  } catch (err) {
+    console.error("deleteNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  }
+}
+
 module.exports = {
   listClients,
   createBusiness,
@@ -1094,6 +1303,8 @@ module.exports = {
   createTaxRecord,
   patchTaxRecord,
   deleteTaxRecord,
+  insertNote,
+  deleteNote,
   createBusinessShareholder,
   deleteBusinessShareholder,
 };

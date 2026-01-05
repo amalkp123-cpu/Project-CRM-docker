@@ -10,6 +10,8 @@ const {
   deleteTaxRecord,
   createBusinessShareholder,
   deleteBusinessShareholder,
+  insertNote,
+  deleteNote,
 } = require("../controllers/bClient.controller");
 
 const router = express.Router();
@@ -32,6 +34,10 @@ router.delete(
   "/:businessId/shareholders/:shareholderId",
   deleteBusinessShareholder
 );
+
+// notes
+router.post("/:businessId/notes", insertNote);
+router.delete("/:businessId/notes/:noteId", deleteNote);
 
 // export router
 module.exports = router;

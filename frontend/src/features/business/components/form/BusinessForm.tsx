@@ -47,7 +47,6 @@ export interface BusinessForm {
   loyaltySince?: string;
   referredBy?: string;
   createdBy?: string;
-  updatedBy?: string;
 
   shareholders: Shareholder[];
 
@@ -134,11 +133,11 @@ export default function BusinessForm() {
   });
 
   const [user, setUser] = useState<any>(null);
-  // const [noteFields, setNoteFields] = useState<number[]>([0]);
+  const [noteFields, setNoteFields] = useState<number[]>([0]);
   const [showMailingAddress, setShowMailingAddress] = useState(false);
 
-  const businessType = watch("businessType");
-  const isFederation = businessType === "federation";
+  const incorporationJurisdiction = watch("incorporationJurisdiction");
+  const isFederation = incorporationJurisdiction === "Federal";
 
   /* ================= USER PREFILL ================= */
 
@@ -149,17 +148,16 @@ export default function BusinessForm() {
 
     setUser(u);
 
-    if (user?.username) {
-      setValue("createdBy", user.username);
-      setValue("updatedBy", user.username);
+    if (u?.username || user?.username) {
+      setValue("createdBy", u.username ? u.username : u.full_name);
     }
   }, [setValue]);
 
-  // /* ================= NOTES ================= */
+  /* ================= NOTES ================= */
 
-  // const addNote = () => setNoteFields((p) => [...p, p.length]);
-  // const removeNote = (id: number) =>
-  //   setNoteFields((p) => p.filter((_, i) => i !== id));
+  const addNote = () => setNoteFields((p) => [...p, p.length]);
+  const removeNote = (id: number) =>
+    setNoteFields((p) => p.filter((_, i) => i !== id));
 
   /* ================= SUBMIT ================= */
 
@@ -258,24 +256,14 @@ export default function BusinessForm() {
           <div className={styles.formRow}>
             <div className={styles.formField}>
               <label htmlFor="businessType">Business Type *</label>
-              <select
+              <input
                 id="businessType"
                 {...register("businessType", {
                   required: "Business type is required",
                 })}
                 aria-invalid={!!errors.businessType}
-              >
-                <option value="">Select type</option>
-                <option value="sole-proprietorship">Sole Proprietorship</option>
-                <option value="partnership">Partnership</option>
-                <option value="corporation">Corporation</option>
-                <option value="cooperative">Cooperative</option>
-                <option value="non-profit">Non-Profit</option>
-                <option value="federation">Federation</option>
-                <option value="llc">LLC</option>
-                <option value="trust">Trust</option>
-                <option value="other">Other</option>
-              </select>
+                placeholder="Enter Business Type"
+              />
               {errors.businessType && (
                 <div role="alert" className={styles.errorText}>
                   {errors.businessType.message}
@@ -318,26 +306,7 @@ export default function BusinessForm() {
                   Select jurisdiction
                 </option>
                 <option value="Federal">Federal</option>
-                <option value="Ontario">Ontario</option>
-                <option value="British Columbia">British Columbia</option>
-                <option value="Alberta">Alberta</option>
-                <option value="Quebec">Quebec</option>
-                <option value="Manitoba">Manitoba</option>
-                <option value="Saskatchewan">Saskatchewan</option>
-                <option value="Nova Scotia">Nova Scotia</option>
-                <option value="New Brunswick">New Brunswick</option>
-                <option value="Newfoundland and Labrador">
-                  Newfoundland and Labrador
-                </option>
-                <option value="Prince Edward Island">
-                  Prince Edward Island
-                </option>
-                <option value="Northwest Territories">
-                  Northwest Territories
-                </option>
-                <option value="Yukon">Yukon</option>
-                <option value="Nunavut">Nunavut</option>
-                <option value="Delaware">Delaware (US)</option>
+                <option value="Provincial">Provincial</option>
                 <option value="Other">Other</option>
               </select>
               {errors.incorporationJurisdiction && (
@@ -649,16 +618,6 @@ export default function BusinessForm() {
                 disabled
               />
             </div>
-
-            <div className={styles.formField}>
-              <label htmlFor="updatedBy">Updated By</label>
-              <input
-                id="updatedBy"
-                {...register("updatedBy")}
-                readOnly
-                disabled
-              />
-            </div>
           </div>
         </section>
 
@@ -682,15 +641,6 @@ export default function BusinessForm() {
                 <option value="Quarterly">Quarterly</option>
                 <option value="Yearly">Yearly</option>
               </select>
-            </div>
-
-            <div className={styles.formField}>
-              <label htmlFor="hstStartingDate">Starting Date</label>
-              <input
-                id="hstStartingDate"
-                type="date"
-                {...register("hstStartingDate")}
-              />
             </div>
           </div>
         </section>
@@ -819,7 +769,7 @@ export default function BusinessForm() {
           </section>
         )}
 
-        {/* <section className={styles.formSection}>
+        <section className={styles.formSection}>
           <h3>Notes</h3>
           <div className={styles.formRow}>
             <div className={`${styles.formField} ${styles.textAreaField}`}>
@@ -850,7 +800,7 @@ export default function BusinessForm() {
               Add Notes
             </button>
           </div>
-        </section> */}
+        </section>
       </section>
 
       <div className={styles.formActions}>
