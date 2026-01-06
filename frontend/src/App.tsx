@@ -5,6 +5,8 @@ import NotFound from "./notfound";
 import MainLayout from "./layout/MainLayout";
 import { PersonalDetails } from "./features/personal";
 import { BusinessDetails } from "./features/business";
+import UserManagement from "./pages/UserManagement";
+import Profile from "./pages/Profile";
 import Home from "./pages/Home";
 import Clients from "./pages/Clients";
 import "./App.css";
@@ -51,6 +53,8 @@ function App() {
           <Route path="add_personal" element={<AddPersonal />} />
           <Route path="business/:id" element={<BusinessDetails />} />
           <Route path="add_business" element={<AddBusiness />} />
+          <Route path="users" element={<UserManagement />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
 
         <Route element={<NoNavbarLayout />}>

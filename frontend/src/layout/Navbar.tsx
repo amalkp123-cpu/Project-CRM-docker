@@ -16,21 +16,6 @@ const Navbar = () => {
     setUser(stored);
   }, []);
 
-  function handleLogout() {
-    const ok = window.confirm("Log out of your account?");
-    if (!ok) return;
-
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-
-    sessionStorage.removeItem("user");
-    sessionStorage.removeItem("token");
-
-    setUser(null);
-
-    navigate("/signin");
-  }
-
   return (
     <div className={styles.navbar}>
       <h3>Welcome Back{user?.username ? `, ${user.username}` : ""}</h3>
@@ -40,7 +25,7 @@ const Navbar = () => {
           <IoNotificationsOutline size="1.6rem" />
         </div>
 
-        <div className={styles.profile} onClick={handleLogout}>
+        <div className={styles.profile} onClick={() => navigate("/profile")}>
           <div className={styles.img}></div>
 
           <div className={styles.credentials}>

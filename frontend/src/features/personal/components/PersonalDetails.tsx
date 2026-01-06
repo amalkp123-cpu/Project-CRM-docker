@@ -231,6 +231,16 @@ export default function PersonalDetails() {
     // or return `${month}/${day}/${year}`; // MM/DD/YYYY
     // or return `${year}-${month}-${day}`; // YYYY-MM-DD
   }
+  function formatDateTime(ts?: string) {
+    if (!ts) return "—";
+    return new Date(ts).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
 
   async function refreshClient() {
     await fetchClient();
@@ -337,32 +347,41 @@ export default function PersonalDetails() {
               <Field label="Referred By" value={client.referred_by} />
             </div>
           </div>
-          {/* ADDRESSES - Updated for singular */}
-          {client.addresses?.length !== 0 && (
+
+          {/* ADDRESS */}
+          {client.addresses?.length > 0 && (
             <div className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Address</h3>
-              </div>
               {client.addresses.slice(0, 1).map((addr: any) => (
-                <div
+                <section
                   key={addr.id}
-                  className={`${styles.grid} ${
-                    spouse?.id && !hideSpouse ? "" : styles.gridFlex
-                  }`}
+                  title="Address"
+                  className={styles.addressSection}
                 >
-                  <Field label="Line 1" value={addr.address_line1} />
-                  <Field
-                    label="Line 2"
-                    value={addr.address_line2 ? `, ${addr.address_line2}` : ""}
-                  />
-                  <Field label="City" value={addr.city} />
-                  <Field label="Province" value={addr.province} />
-                  <Field label="Postal" value={addr.postal_code} />
-                  <Field label="Country" value={addr.country} />
-                </div>
+                  <h3 className={styles.sectionTitle}>Address</h3>
+
+                  <div className={styles.addressLine}>
+                    <span className={styles.addressTop}>
+                      {[addr.address_line1, addr.address_line2]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                    <br />
+                    <span className={styles.addressBottom}>
+                      {[
+                        addr.city,
+                        addr.province,
+                        addr.postal_code,
+                        addr.country,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  </div>
+                </section>
               ))}
             </div>
           )}
+
           {/* TAX RECORDS WITH EDIT AND DELETE BUTTONS */}
           {client.tax_records?.length !== 0 && (
             <div className={styles.section}>
@@ -377,8 +396,9 @@ export default function PersonalDetails() {
                         <th>Tax Year</th>
                         <th>Status</th>
                         <th>Date</th>
-                        <th>Created By</th>
                         <th>Prepared By</th>
+                        <th>Submitted By</th>
+                        <th>Created By</th>
                         <th>HST</th>
                         <th>Actions</th>
                       </tr>
@@ -399,8 +419,19 @@ export default function PersonalDetails() {
                           <td>
                             {tax.tax_date ? formatDate(tax.tax_date) : "—"}
                           </td>
+                          <td>
+                            {tax.tax_status === "InProgress" ||
+                            tax.tax_status === "ReadyToFile"
+                              ? tax.prepared_by || "—"
+                              : "—"}
+                          </td>
+                          <td>
+                            {tax.tax_status === "FiledOn"
+                              ? tax.prepared_by || tax.submitted_by || "—"
+                              : "—"}
+                          </td>
+
                           <td>{tax.created_by}</td>
-                          <td>{tax.prepared_by}</td>
                           <td>
                             {tax.hst_docs === null ? (
                               "None"
@@ -472,7 +503,7 @@ export default function PersonalDetails() {
                       <tr key={note.id}>
                         <td>{note.note_text}</td>
                         <td>{note.created_by}</td>
-                        <td>{formatDate(note.created_at)}</td>
+                        <td>{formatDateTime(note.created_at)}</td>
                         <td>
                           <button
                             className={styles.deleteBtn}
@@ -603,31 +634,36 @@ export default function PersonalDetails() {
                 />
               </div>
             </div>
-            {/* ADDRESSES - Updated for singular */}
-            {spouse.addresses?.length !== 0 && (
+            {/* ADDRESS */}
+            {spouse.addresses?.length > 0 && (
               <div className={styles.section}>
-                <div className={styles.sectionHeader}>
-                  <h3 className={styles.sectionTitle}>Addresses</h3>
-                </div>
                 {spouse.addresses.slice(0, 1).map((addr: any) => (
-                  <div
+                  <section
                     key={addr.id}
-                    className={`${styles.grid} ${
-                      spouse?.id && !hideSpouse ? "" : styles.gridFlex
-                    }`}
+                    title="Address"
+                    className={styles.addressSection}
                   >
-                    <Field label="Line 1" value={addr.address_line1} />
-                    <Field
-                      label="Line 2"
-                      value={
-                        addr.address_line2 ? `, ${addr.address_line2}` : ""
-                      }
-                    />
-                    <Field label="City" value={addr.city} />
-                    <Field label="Province" value={addr.province} />
-                    <Field label="Postal" value={addr.postal_code} />
-                    <Field label="Country" value={addr.country} />
-                  </div>
+                    <h3 className={styles.sectionTitle}>Address</h3>
+
+                    <div className={styles.addressLine}>
+                      <span className={styles.addressTop}>
+                        {[addr.address_line1, addr.address_line2]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
+                      <br />
+                      <span className={styles.addressBottom}>
+                        {[
+                          addr.city,
+                          addr.province,
+                          addr.postal_code,
+                          addr.country,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
+                    </div>
+                  </section>
                 ))}
               </div>
             )}
@@ -645,8 +681,9 @@ export default function PersonalDetails() {
                           <th>Tax Year</th>
                           <th>Status</th>
                           <th>Date</th>
-                          <th>Created By</th>
                           <th>Prepared By</th>
+                          <th>Submitted By</th>
+                          <th>Created By</th>
                           <th>HST</th>
                         </tr>
                       </thead>
@@ -666,8 +703,18 @@ export default function PersonalDetails() {
                             <td>
                               {tax.tax_date ? formatDate(tax.tax_date) : "—"}
                             </td>
+                            <td>
+                              {tax.tax_status === "InProgress" ||
+                              tax.tax_status === "ReadyToFile"
+                                ? tax.prepared_by || "—"
+                                : "—"}
+                            </td>
+                            <td>
+                              {tax.tax_status === "FiledOn"
+                                ? tax.prepared_by || tax.submitted_by || "—"
+                                : "—"}
+                            </td>
                             <td>{tax.created_by}</td>
-                            <td>{tax.prepared_by}</td>
                             <td>
                               {tax.hst_required === null
                                 ? "None"
@@ -697,7 +744,7 @@ export default function PersonalDetails() {
                         <div className={styles.italicTag}>
                           -{note.created_by}
                           <br />
-                          {formatDate(note.created_at)}
+                          {formatDateTime(note.created_at)}
                         </div>
                       </div>
                       <button
@@ -716,7 +763,7 @@ export default function PersonalDetails() {
         )}
       </div>
 
-      {/* DEPENDANTS WITH EDIT AND DELETE BUTTONS */}
+      {/* DEPENDANTS WITH EDIT AND DELETE BUTTONS
       {allDependants.length > 0 && (
         <div className={`${styles.section} ${styles.dependentSection}`}>
           <div className={styles.sectionHeader}>
@@ -766,6 +813,76 @@ export default function PersonalDetails() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )} */}
+
+      {/* DEPENDANTS TABLE */}
+      {allDependants.length > 0 && (
+        <div className={`${styles.section} ${styles.dependentSection}`}>
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>Dependants</h3>
+          </div>
+
+          <div className={styles.tableContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Relationship</th>
+                  <th>Gender</th>
+                  <th>DOB</th>
+                  <th>Disability</th>
+                  <th>Same Address</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {allDependants.map((dep: any) => (
+                  <tr key={dep.id}>
+                    <td>
+                      {dep.first_name} {dep.last_name}
+                    </td>
+
+                    <td>{toCapital(dep.relationship)}</td>
+
+                    <td>{dep.gender || "—"}</td>
+
+                    <td>{dep.dob ? formatDate(dep.dob) : "—"}</td>
+
+                    <td>
+                      {dep.disability ? dep.disability_notes || "Yes" : "No"}
+                    </td>
+
+                    <td>{dep.same_address ? "Yes" : "No"}</td>
+
+                    <td>
+                      <div className={styles.buttonContainer}>
+                        <button
+                          className={styles.editBtn}
+                          onClick={() => {
+                            setSelectedDependant(dep);
+                            setEditDependantModalVisible(true);
+                          }}
+                          title="Edit dependent"
+                        >
+                          <MdEdit size="1rem" />
+                        </button>
+
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={() => handleDeleteDependent(dep.id)}
+                          title="Delete dependent"
+                        >
+                          <MdDelete size="1rem" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

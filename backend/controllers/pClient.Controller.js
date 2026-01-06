@@ -985,6 +985,115 @@ async function createPersonal(req, res) {
   }
 }
 
+async function createSpouse(req, res) {
+  const payload = req.body || {};
+  const clientId = req.params.id;
+  const createdById = req.user?.id || null;
+
+  if (!createdById) {
+    return res.status(401).json({ error: "unauthenticated" });
+  }
+
+  if (!clientId) {
+    return res.status(400).json({ error: "client_id_required" });
+  }
+
+  const clientConn = await pool.connect();
+
+  try {
+    await clientConn.query("BEGIN");
+    const now = new Date();
+
+    let spouseId = null;
+
+    /* ======================================================
+       CASE 1: EXISTING SPOUSE UUID PROVIDED
+       ====================================================== */
+    if (payload.spouseClientId) {
+      const check = await clientConn.query(
+        `SELECT id FROM clients WHERE id = $1`,
+        [payload.spouseClientId]
+      );
+
+      if (!check.rows.length) {
+        throw new Error("spouse_client_not_found");
+      }
+
+      spouseId = payload.spouseClientId;
+    } else {
+      /* ======================================================
+       CASE 2: CREATE NEW SPOUSE CLIENT
+       ====================================================== */
+      if (!payload.firstName || !payload.lastName || !payload.dob) {
+        throw new Error("insufficient_spouse_details");
+      }
+
+      const sin = payload.sin ? nullify(payload.sin) : null;
+      const sinHash = sin ? sha256(sin) : null;
+
+      const insertSpouseSql = `
+        INSERT INTO clients
+          (first_name, last_name, dob, gender, phone, email,
+           marital_status, sin_encrypted, sin_hash,
+           created_by, created_at, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        RETURNING id
+      `;
+
+      const spouseVals = [
+        payload.firstName,
+        payload.lastName,
+        payload.dob,
+        payload.gender || null,
+        payload.phone || null,
+        payload.email || null,
+        "married",
+        sin ? encrypt(sin) : null,
+        sinHash,
+        createdById,
+        now,
+        now,
+      ];
+
+      const spouseRes = await clientConn.query(insertSpouseSql, spouseVals);
+
+      spouseId = spouseRes.rows[0].id;
+    }
+
+    /* ======================================================
+       LINK BOTH CLIENTS
+       ====================================================== */
+    const linkSql = `
+      INSERT INTO spouse_links (client_id, linked_client_id, date_of_marriage)
+      VALUES ($1,$2,$3)
+      ON CONFLICT DO NOTHING
+    `;
+
+    const dom = payload.dateOfMarriage || null;
+
+    await clientConn.query(linkSql, [clientId, spouseId, dom]);
+    await clientConn.query(linkSql, [spouseId, clientId, dom]);
+
+    await clientConn.query("COMMIT");
+
+    return res.status(201).json({
+      clientId,
+      spouseId,
+      linked: true,
+    });
+  } catch (err) {
+    await clientConn.query("ROLLBACK").catch(() => {});
+    console.error("createSpouse error:", err);
+
+    return res.status(400).json({
+      error: "create_spouse_failed",
+      details: err.message,
+    });
+  } finally {
+    clientConn.release();
+  }
+}
+
 async function deleteClient(req, res) {
   const clientId = req.params.id;
   const actor = req.user?.id;
@@ -1897,6 +2006,7 @@ async function patchDependent(req, res) {
 module.exports = {
   listClients,
   createPersonal,
+  createSpouse,
   getClient,
   deleteClient,
   patchClient,

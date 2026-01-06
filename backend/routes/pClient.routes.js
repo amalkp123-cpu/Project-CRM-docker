@@ -1,6 +1,8 @@
 const express = require("express");
+const { requireRole } = require("../middleware/auth.middleware");
 const {
   createPersonal,
+  createSpouse,
   listClients,
   getClient,
   deleteClient,
@@ -26,7 +28,8 @@ router.post("/", createPersonal);
 router.get("/:id", getClient);
 router.patch("/edit/:id", patchClient);
 router.delete("/:id", deleteClient);
-router.post("/bulk", createBulk);
+router.post("/bulk", requireRole("admin"), createBulk);
+router.post("/:id/spouse", createSpouse);
 
 // ADDRESSES
 router.post("/:id/addresses", insertAddress);

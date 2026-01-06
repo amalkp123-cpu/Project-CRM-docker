@@ -4,7 +4,7 @@ const { createUser, findUserByUsername } = require("../models/user.models");
 
 exports.register = async (req, res) => {
   try {
-    const { username, fullName, password, role } = req.body;
+    const { username, full_name, password, role } = req.body;
 
     const existingUser = await findUserByUsername(username);
 
@@ -13,7 +13,7 @@ exports.register = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await createUser(username, fullName, hashedPassword, role);
+    const newUser = await createUser(username, full_name, hashedPassword, role);
 
     return res
       .status(201)

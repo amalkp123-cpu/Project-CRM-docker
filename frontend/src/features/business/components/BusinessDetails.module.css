@@ -283,7 +283,7 @@ td .buttonContainer {
 }
 
 .table td {
-  padding: 1rem;
+  padding: 0.4rem 0.8rem;
   font-size: 0.875rem;
   color: #1f2937;
 }

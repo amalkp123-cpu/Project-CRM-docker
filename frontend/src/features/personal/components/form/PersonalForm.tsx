@@ -267,15 +267,18 @@ export default function PersonalForm() {
         onSubmit={handleSubmit(onSubmit)}
         noValidate
       >
-        <button
-          onClick={() => {
-            setBulkModalVisible(true);
-          }}
-          className={styles.bulkButton}
-          type="button"
-        >
-          Bulk Upload (Demo)
-        </button>
+        {user?.role === "admin" && (
+          <button
+            onClick={() => {
+              setBulkModalVisible(true);
+            }}
+            className={styles.bulkButton}
+            type="button"
+          >
+            Bulk Upload
+          </button>
+        )}
+
         <section className={styles.relationSection}>
           <section className={styles.formSection}>
             <h3>Basic Details</h3>

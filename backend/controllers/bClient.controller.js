@@ -7,13 +7,6 @@ function nullify(v) {
   return v;
 }
 
-function pick(obj, ...keys) {
-  for (const k of keys) {
-    if (Object.prototype.hasOwnProperty.call(obj, k)) return obj[k];
-  }
-  return undefined;
-}
-
 function normalizeQuarter(q) {
   if (q === undefined || q === null) return null;
 

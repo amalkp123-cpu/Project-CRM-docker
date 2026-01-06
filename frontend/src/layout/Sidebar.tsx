@@ -92,7 +92,7 @@ const Sidebar = () => {
           </nav>
         </div>
         <footer className={styles.footer}>
-          <div>
+          <div onClick={() => navigate("/users")}>
             <CgProfile size={"1.6rem"} /> User Management
           </div>
 

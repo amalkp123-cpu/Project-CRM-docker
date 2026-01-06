@@ -1,29 +1,51 @@
-import React from "react";
+import { useEffect, useState } from "react";
 import styles from "./totalClientsCard.module.css";
 
-type Props = {
-  /* static for now — props reserved for future use */
-};
+const API_URL = import.meta.env.VITE_API_URL;
 
-const TotalClientsCard: React.FC<Props> = () => {
-  const total = 547;
-  const personal = 396;
-  const business = 157;
+interface Counts {
+  personalClients: number;
+  businessClients: number;
+  totalClients: number;
+}
 
-  // donut math (percentage of circle)
+const TotalClientsCard = () => {
+  const [counts, setCounts] = useState<Counts | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(`${API_URL}/api/dashboard/counts`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((r) => r.json())
+      .then(setCounts)
+      .catch(() => {
+        /* silent fail; dashboard must not crash */
+      });
+  }, []);
+
+  const personal = counts?.personalClients ?? 0;
+  const business = counts?.businessClients ?? 0;
+  const total = counts?.totalClients ?? 0;
+
+  /* donut math */
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
-  const progress = Math.min(
-    100,
-    Math.round((total / (personal + business + 0)) * 100)
-  ); // defensive
+  const progress =
+    personal + business > 0
+      ? Math.round((total / (personal + business)) * 100)
+      : 0;
   const offset = circumference * (1 - progress / 100);
 
   return (
     <div className={styles.card}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <span className={styles.icon} aria-hidden></span>
+          <span className={styles.icon} aria-hidden />
           <h3 className={styles.title}>Total Clients</h3>
         </div>
       </header>
@@ -39,15 +61,14 @@ const TotalClientsCard: React.FC<Props> = () => {
             <defs>
               <linearGradient id="g1" x1="0" x2="1">
                 <stop offset="0%" stopColor="#1420FF" />
-                <stop offset="100%" stopColor="#1420FF" stopOpacity="1" />
+                <stop offset="100%" stopColor="#1420FF" />
               </linearGradient>
               <linearGradient id="g2" x1="0" x2="1">
-                <stop offset="0%" stopColor="#1420FF" />
-                <stop offset="100%" stopColor="#1420FF" />
+                <stop offset="0%" stopColor="#E5E7EB" />
+                <stop offset="100%" stopColor="#E5E7EB" />
               </linearGradient>
             </defs>
 
-            {/* background track */}
             <g transform="translate(70,70)">
               <circle
                 r={radius}

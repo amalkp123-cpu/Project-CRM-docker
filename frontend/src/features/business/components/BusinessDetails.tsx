@@ -24,6 +24,17 @@ function formatDate(dateString?: string | null) {
   ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+function formatDateTime(ts?: string) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function BusinessDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -683,7 +694,7 @@ export default function BusinessDetails() {
                         <tr key={note.id}>
                           <td>{note.note_text}</td>
                           <td>{note.created_by}</td>
-                          <td>{formatDate(note.created_at)}</td>
+                          <td>{formatDateTime(note.created_at)}</td>
                           <td>
                             <button
                               className={styles.deleteBtn}

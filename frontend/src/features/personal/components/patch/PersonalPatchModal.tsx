@@ -69,13 +69,6 @@ function validateCanadianSIN(sin = "") {
   return true;
 }
 
-function validateCanadianPostalCode(postal = "") {
-  const cleaned = postal.replace(/\s/g, "").toUpperCase();
-  const regex = /^[A-Z]\d[A-Z]\d[A-Z]\d$/;
-  if (!regex.test(cleaned)) return "Invalid postal code format (e.g., A1A 1A1)";
-  return true;
-}
-
 export default function PersonalPatchModal({
   visible,
   onClose,
@@ -464,18 +457,11 @@ export default function PersonalPatchModal({
                   <label htmlFor="addressLine1">Address Line 1</label>
                   <input
                     id="addressLine1"
-                    {...register("addressLine1", {
-                      required: "Address is required",
-                    })}
-                    aria-invalid={!!errors.addressLine1}
+                    {...register("addressLine1")}
                     placeholder="123 Main St"
                   />
-                  {errors.addressLine1 && (
-                    <div role="alert" className={styles.errorText}>
-                      {errors.addressLine1.message}
-                    </div>
-                  )}
                 </div>
+
                 <div className={styles.formField}>
                   <label htmlFor="addressLine2">Address Line 2</label>
                   <input
@@ -491,33 +477,18 @@ export default function PersonalPatchModal({
                   <label htmlFor="city">City</label>
                   <input
                     id="city"
-                    {...register("city", {
-                      required: "City is required",
-                    })}
-                    aria-invalid={!!errors.city}
+                    {...register("city")}
                     placeholder="Toronto"
                   />
-                  {errors.city && (
-                    <div role="alert" className={styles.errorText}>
-                      {errors.city.message}
-                    </div>
-                  )}
                 </div>
+
                 <div className={styles.formField}>
                   <label htmlFor="province">Province</label>
                   <input
                     id="province"
-                    {...register("province", {
-                      required: "Province is required",
-                    })}
-                    aria-invalid={!!errors.province}
+                    {...register("province")}
                     placeholder="ON"
                   />
-                  {errors.province && (
-                    <div role="alert" className={styles.errorText}>
-                      {errors.province.message}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -526,35 +497,19 @@ export default function PersonalPatchModal({
                   <label htmlFor="postalCode">Postal Code</label>
                   <input
                     id="postalCode"
-                    {...register("postalCode", {
-                      required: "Postal code is required",
-                      validate: validateCanadianPostalCode,
-                    })}
-                    aria-invalid={!!errors.postalCode}
+                    {...register("postalCode")}
                     placeholder="A1A 1A1"
                     maxLength={7}
                   />
-                  {errors.postalCode && (
-                    <div role="alert" className={styles.errorText}>
-                      {errors.postalCode.message}
-                    </div>
-                  )}
                 </div>
+
                 <div className={styles.formField}>
                   <label htmlFor="country">Country</label>
                   <input
                     id="country"
-                    {...register("country", {
-                      required: "Country is required",
-                    })}
-                    aria-invalid={!!errors.country}
+                    {...register("country")}
                     placeholder="Canada"
                   />
-                  {errors.country && (
-                    <div role="alert" className={styles.errorText}>
-                      {errors.country.message}
-                    </div>
-                  )}
                 </div>
               </div>
             </section>

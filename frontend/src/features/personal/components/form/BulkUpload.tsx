@@ -54,14 +54,12 @@ export default function BulkUploadModal({
     };
 
     if (row.spouseFirstName && row.spouseLastName) {
-      client.spouse = {
-        firstName: row.spouseFirstName,
-        lastName: row.spouseLastName,
-        dob: row["spouseDob (YYYY-MM-DD)"] || null,
-        sin: row.spouseSin || null,
-        phone: row.spousePhone || null,
-        email: row.spouseEmail || null,
-      };
+      client.spouseFirstName = row.spouseFirstName?.trim();
+      client.spouseLastName = row.spouseLastName?.trim();
+      client.spouseDob = row["spouseDob (YYYY-MM-DD)"] || null;
+      client.spouseSin = row.spouseSin || null;
+      client.spousePhone = row.spousePhone || null;
+      client.spouseEmail = row.spouseEmail || null;
     }
 
     return client;
