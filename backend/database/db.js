@@ -8,7 +8,7 @@ const pool = new Pool(
   process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false }, // REQUIRED on Render
+        ssl: { rejectUnauthorized: false },
         max: 10,
       }
     : {
@@ -22,9 +22,10 @@ const pool = new Pool(
 );
 
 async function initializeDatabase() {
-  // 🚫 Never auto-run schema in production
   if (isProd) {
     console.log("Skipping DB init in production");
+    await seedAdmin(pool);
+    console.log("Admin seeded");
     return;
   }
 
