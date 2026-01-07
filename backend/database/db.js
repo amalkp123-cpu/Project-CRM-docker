@@ -24,6 +24,7 @@ const pool = new Pool(
 async function initializeDatabase() {
   if (isProd) {
     console.log("Skipping DB init in production");
+    const { seedAdmin } = require("./seedAdmin");
     await seedAdmin(pool);
     console.log("Admin seeded");
     return;
