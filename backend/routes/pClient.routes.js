@@ -16,6 +16,7 @@ const {
   deleteTaxRecord,
   deleteNote,
   insertNote,
+  patchNote,
   patchDependent,
   patchTaxRecord,
 } = require("../controllers/pClient.Controller");
@@ -47,7 +48,8 @@ router.patch("/:id/tax-records/:taxId", patchTaxRecord);
 
 // Notes
 router.post("/:id/notes", insertNote);
-router.delete("/:id/notes/:noteId", deleteNote);
+router.delete("/:id/notes/:noteId", requireRole("admin"), deleteNote);
+router.patch("/:id/notes/:noteId", requireRole("admin"), patchNote);
 
 // export router
 module.exports = router;

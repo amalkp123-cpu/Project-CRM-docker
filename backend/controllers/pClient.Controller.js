@@ -1533,6 +1533,56 @@ async function deleteNote(req, res) {
   }
 }
 
+async function patchNote(req, res) {
+  const clientId = req.params.id;
+  const noteId = req.params.noteId;
+  const { note } = req.body;
+  const userId = req.user?.id;
+
+  if (!noteId) {
+    return res.status(400).json({ error: "note_id_required" });
+  }
+
+  if (typeof note !== "string" || !note.trim()) {
+    return res.status(400).json({ error: "invalid_note" });
+  }
+
+  const conn = await pool.connect();
+  try {
+    await conn.query("BEGIN");
+
+    const result = await conn.query(
+      `UPDATE notes
+       SET note_text = $1,
+           updated_at = NOW()
+       WHERE id = $2
+         AND client_id = $3
+       RETURNING *`,
+      [note.trim(), noteId, clientId]
+    );
+
+    if (result.rowCount === 0) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({
+        error: "note_not_found",
+        message: "note not found or does not belong to this client",
+      });
+    }
+
+    await conn.query("COMMIT");
+    return res.json(result.rows[0]);
+  } catch (err) {
+    await conn.query("ROLLBACK");
+    console.error("patchNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
 async function insertDependent(req, res) {
   const clientId = req.params.id;
   const {
@@ -2022,4 +2072,5 @@ module.exports = {
   patchTaxRecord,
   insertNote,
   deleteNote,
+  patchNote,
 };

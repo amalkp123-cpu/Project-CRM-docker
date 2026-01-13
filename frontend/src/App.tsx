@@ -50,7 +50,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="clients" element={<Clients />} />
           <Route path="personal/:id" element={<PersonalDetails />} />
-          <Route path="add_personal" element={<AddPersonal />} />
+
           <Route path="business/:id" element={<BusinessDetails />} />
           <Route path="add_business" element={<AddBusiness />} />
           <Route path="users" element={<UserManagement />} />
@@ -59,6 +59,8 @@ function App() {
 
         <Route element={<NoNavbarLayout />}>
           <Route path="*" element={<NotFound />} />
+          <Route path="add_personal" element={<AddPersonal />} />
+          <Route path="add_business" element={<AddBusiness />} />
         </Route>
 
         <Route path="/" element={<EmptyLayout />}>

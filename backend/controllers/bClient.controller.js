@@ -1287,6 +1287,215 @@ async function deleteNote(req, res) {
   }
 }
 
+async function patchNote(req, res) {
+  const businessId = req.params.businessId;
+  const noteId = req.params.noteId;
+  const { note } = req.body;
+  const userId = req.user?.id;
+
+  if (!noteId) {
+    return res.status(400).json({ error: "note_id_required" });
+  }
+
+  if (typeof note !== "string" || !note.trim()) {
+    return res.status(400).json({ error: "invalid_note" });
+  }
+
+  const conn = await pool.connect();
+  try {
+    await conn.query("BEGIN");
+
+    const result = await conn.query(
+      `UPDATE business_notes
+       SET note_text = $1,
+           updated_at = NOW()
+       WHERE id = $2
+         AND business_id = $3
+       RETURNING *`,
+      [note.trim(), noteId, businessId]
+    );
+
+    if (result.rowCount === 0) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({
+        error: "note_not_found",
+        message: "note not found or does not belong to this business",
+      });
+    }
+
+    await conn.query("COMMIT");
+    return res.json(result.rows[0]);
+  } catch (err) {
+    await conn.query("ROLLBACK");
+    console.error("patchNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
+async function getTaxNotes(req, res) {
+  const { taxRecordId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT
+         n.id,
+         n.business_tax_record_id,
+         n.note_text,
+         n.created_at,
+         n.updated_at,
+         u.username AS created_by
+       FROM business_tax_notes n
+       JOIN app_users u
+         ON u.id = n.created_by
+       WHERE n.business_tax_record_id = $1
+       ORDER BY n.created_at DESC`,
+      [taxRecordId]
+    );
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.error("getTaxNotes error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  }
+}
+
+async function insertTaxNote(req, res) {
+  const { taxRecordId } = req.params;
+  const { note } = req.body;
+  const userId = req.user?.id;
+
+  if (typeof note !== "string" || !note.trim()) {
+    return res.status(400).json({ error: "invalid_note" });
+  }
+
+  const conn = await pool.connect();
+  try {
+    await conn.query("BEGIN");
+
+    const recordCheck = await conn.query(
+      "SELECT id FROM business_tax_records WHERE id = $1",
+      [taxRecordId]
+    );
+
+    if (!recordCheck.rows.length) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({ error: "tax_record_not_found" });
+    }
+
+    const result = await conn.query(
+      `INSERT INTO business_tax_notes
+       (business_tax_record_id, note_text, created_by)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [taxRecordId, note.trim(), userId]
+    );
+
+    await conn.query("COMMIT");
+    return res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await conn.query("ROLLBACK");
+    console.error("insertTaxNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
+async function patchTaxNote(req, res) {
+  const { taxRecordId, noteId } = req.params;
+  const { note } = req.body;
+
+  if (!noteId) {
+    return res.status(400).json({ error: "note_id_required" });
+  }
+
+  if (typeof note !== "string" || !note.trim()) {
+    return res.status(400).json({ error: "invalid_note" });
+  }
+
+  const conn = await pool.connect();
+  try {
+    await conn.query("BEGIN");
+
+    const result = await conn.query(
+      `UPDATE business_tax_notes
+       SET note_text = $1,
+           updated_at = NOW()
+       WHERE id = $2
+         AND business_tax_record_id = $3
+       RETURNING *`,
+      [note.trim(), noteId, taxRecordId]
+    );
+
+    if (result.rowCount === 0) {
+      await conn.query("ROLLBACK");
+      return res.status(404).json({
+        error: "note_not_found",
+        message: "note not found or does not belong to this tax record",
+      });
+    }
+
+    await conn.query("COMMIT");
+    return res.json(result.rows[0]);
+  } catch (err) {
+    await conn.query("ROLLBACK");
+    console.error("patchTaxNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  } finally {
+    conn.release();
+  }
+}
+
+async function deleteTaxNote(req, res) {
+  const { taxRecordId, noteId } = req.params;
+
+  if (!noteId) {
+    return res.status(400).json({ error: "note_id_required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM business_tax_notes
+       WHERE id = $1
+         AND business_tax_record_id = $2
+       RETURNING id`,
+      [noteId, taxRecordId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "note_not_found",
+        message: "note not found or does not belong to this tax record",
+      });
+    }
+
+    return res.json({
+      success: true,
+      id: noteId,
+    });
+  } catch (err) {
+    console.error("deleteTaxNote error:", err);
+    return res.status(500).json({
+      error: "server_error",
+      details: err.message,
+    });
+  }
+}
+
 module.exports = {
   listClients,
   createBusiness,
@@ -1298,6 +1507,11 @@ module.exports = {
   deleteTaxRecord,
   insertNote,
   deleteNote,
+  patchNote,
   createBusinessShareholder,
   deleteBusinessShareholder,
+  getTaxNotes,
+  insertTaxNote,
+  patchTaxNote,
+  deleteTaxNote,
 };

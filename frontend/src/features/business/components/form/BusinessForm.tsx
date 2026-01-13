@@ -33,6 +33,8 @@ export interface BusinessForm {
   incorporationDate: string;
   incorporationJurisdiction: string;
   fiscalYearEnd: string;
+  fiscalYearEndMonth: string;
+  fiscalYearEndYear: string;
   ontarioCorpNumber?: string;
 
   addresses: Address[];
@@ -81,11 +83,18 @@ function formatPhoneForDisplay(value = "") {
   return value;
 }
 
-function validateBusinessNumber(bn = "") {
-  if (!bn) return true;
-  const d = sanitizeDigits(bn);
-  if (d.length >= 9 && d.length <= 15) return true;
-  return "Business Number must be 9–15 digits";
+function validateBusinessNumber(value = "") {
+  if (!value) return true; // optional field
+
+  const v = value.replace(/\s|-/g, "").toUpperCase();
+
+  // Base BN only
+  if (/^\d{9}$/.test(v)) return true;
+
+  // BN + program account (RT/RP/RC + 4 digits)
+  if (/^\d{9}(RT|RP|RC)\d{4}$/.test(v)) return true;
+
+  return "Enter a valid Business Number (e.g. 123456789 or 123456789RT0001)";
 }
 
 /* ================= COMPONENT ================= */
@@ -165,8 +174,22 @@ export default function BusinessForm() {
     try {
       const token = localStorage.getItem("token");
 
+      const fiscalYearEnd =
+        data.fiscalYearEndYear && data.fiscalYearEndMonth
+          ? new Date(
+              Number(data.fiscalYearEndYear),
+              Number(data.fiscalYearEndMonth), // next month
+              0 // day 0 = last day of prev month
+            )
+              .toISOString()
+              .slice(0, 10) // YYYY-MM-DD
+          : "";
+
+      const { fiscalYearEndMonth, fiscalYearEndYear, ...rest } = data;
+
       const payload = {
-        ...data,
+        ...rest,
+        fiscalYearEnd,
         addresses: [
           {
             ...data.addresses[0],
@@ -317,20 +340,51 @@ export default function BusinessForm() {
             </div>
 
             <div className={styles.formField}>
-              <label htmlFor="fiscalYearEnd">Fiscal Year End *</label>
-              <input
-                id="fiscalYearEnd"
-                type="date"
-                {...register("fiscalYearEnd", {
-                  required: "Fiscal year end is required",
-                })}
-                aria-invalid={!!errors.fiscalYearEnd}
-              />
-              {errors.fiscalYearEnd && (
-                <div role="alert" className={styles.errorText}>
-                  {errors.fiscalYearEnd.message}
-                </div>
-              )}
+              <label>Fiscal Year End *</label>
+
+              <div className={styles.inlineFields}>
+                <select
+                  {...register("fiscalYearEndMonth", {
+                    required: "Month required",
+                  })}
+                >
+                  <option value="">Month</option>
+                  {[
+                    "01",
+                    "02",
+                    "03",
+                    "04",
+                    "05",
+                    "06",
+                    "07",
+                    "08",
+                    "09",
+                    "10",
+                    "11",
+                    "12",
+                  ].map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  {...register("fiscalYearEndYear", {
+                    required: "Year required",
+                  })}
+                >
+                  <option value="">Year</option>
+                  {Array.from({ length: 10 }, (_, i) => {
+                    const y = new Date().getFullYear() + i;
+                    return (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           </div>
 

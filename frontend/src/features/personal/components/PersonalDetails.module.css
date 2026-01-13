@@ -323,3 +323,10 @@ td .buttonContainer {
   background-color: #ebebeb;
   color: #555;
 }
+
+.noteEditInput {
+  width: 100%;
+  min-height: 1.3rem;
+  resize: vertical;
+  font-family: inherit;
+}

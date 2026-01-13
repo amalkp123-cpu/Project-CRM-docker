@@ -52,3 +52,10 @@
 tbody tr:hover {
   background-color: #fafafa;
 }
+
+.noteEditInput {
+  width: 100%;
+  min-height: 1.3rem;
+  resize: vertical;
+  font-family: inherit;
+}

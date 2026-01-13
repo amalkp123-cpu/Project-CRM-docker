@@ -31,6 +31,8 @@ export default function PersonalDetails() {
   const [patchSaving, setPatchSaving] = useState(false);
 
   const [showAllNotes, setShowAllNotes] = useState(false);
+  const [editingNote, setEditingNote] = useState<any>(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
   // Edit modal states
   const [editTaxModalVisible, setEditTaxModalVisible] = useState(false);
@@ -202,6 +204,30 @@ export default function PersonalDetails() {
       alert(`Error: ${error.message}`);
     }
   };
+
+  //PATCH Note
+  async function handleEditNoteSave(noteId: string) {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${API_URL}/api/pClient/${id}/notes/${noteId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ note: noteDraft }),
+      });
+
+      if (!res.ok) throw new Error("Update failed");
+
+      setEditingNote(null);
+      setNoteDraft("");
+      fetchClient(); // whatever you already use to refetch personal client
+    } catch (e: any) {
+      alert(e.message || "Update failed");
+    }
+  }
 
   const copyClientId = async (clientId: string) => {
     try {
@@ -501,17 +527,69 @@ export default function PersonalDetails() {
                       : client.notes.slice(0, 5)
                     ).map((note: any) => (
                       <tr key={note.id}>
-                        <td>{note.note_text}</td>
+                        {/* NOTE CELL */}
+                        <td>
+                          {editingNote?.id === note.id ? (
+                            <textarea
+                              value={noteDraft}
+                              onChange={(e) => setNoteDraft(e.target.value)}
+                              rows={2}
+                              className={styles.noteEditInput}
+                              autoFocus
+                            />
+                          ) : (
+                            note.note_text
+                          )}
+                        </td>
+
                         <td>{note.created_by}</td>
                         <td>{formatDateTime(note.created_at)}</td>
+
+                        {/* ACTIONS */}
                         <td>
-                          <button
-                            className={styles.deleteBtn}
-                            onClick={() => handleDeleteNote(note.id)}
-                            title="Delete note"
-                          >
-                            <MdDelete size="1rem" />
-                          </button>
+                          <div className={styles.buttonContainer}>
+                            {editingNote?.id === note.id ? (
+                              <>
+                                <button
+                                  className={styles.editBtn}
+                                  onClick={() => handleEditNoteSave(note.id)}
+                                >
+                                  Save
+                                </button>
+
+                                <button
+                                  className={styles.deleteBtn}
+                                  onClick={() => {
+                                    setEditingNote(null);
+                                    setNoteDraft("");
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  className={styles.editBtn}
+                                  title="Edit note"
+                                  onClick={() => {
+                                    setEditingNote(note);
+                                    setNoteDraft(note.note_text);
+                                  }}
+                                >
+                                  <MdEdit size="1rem" />
+                                </button>
+
+                                <button
+                                  className={styles.deleteBtn}
+                                  title="Delete note"
+                                  onClick={() => handleDeleteNote(note.id)}
+                                >
+                                  <MdDelete size="1rem" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

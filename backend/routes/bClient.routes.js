@@ -1,4 +1,5 @@
 const express = require("express");
+const { requireRole } = require("../middleware/auth.middleware");
 const {
   listClients,
   createBusiness,
@@ -12,6 +13,11 @@ const {
   deleteBusinessShareholder,
   insertNote,
   deleteNote,
+  patchNote,
+  getTaxNotes,
+  insertTaxNote,
+  patchTaxNote,
+  deleteTaxNote,
 } = require("../controllers/bClient.controller");
 
 const router = express.Router();
@@ -37,7 +43,25 @@ router.delete(
 
 // notes
 router.post("/:businessId/notes", insertNote);
-router.delete("/:businessId/notes/:noteId", deleteNote);
+router.delete("/:businessId/notes/:noteId", requireRole("admin"), deleteNote);
+router.patch("/:businessId/notes/:noteId", requireRole("admin"), patchNote);
+
+// tax notes
+router.get("/tax-records/:taxRecordId/notes", getTaxNotes);
+
+router.post("/tax-records/:taxRecordId/notes", insertTaxNote);
+
+router.patch(
+  "/tax-records/:taxRecordId/notes/:noteId",
+  requireRole("admin"),
+  patchTaxNote
+);
+
+router.delete(
+  "/tax-records/:taxRecordId/notes/:noteId",
+  requireRole("admin"),
+  deleteTaxNote
+);
 
 // export router
 module.exports = router;

@@ -7,6 +7,7 @@ import BusinessPatchModal from "./patch/BusinessPatchModal";
 import InsertModal from "./patch/InsertModal";
 import EditTaxModal from "./patch/EditTaxModal";
 import FileViewModal from "./files/FileViewModal";
+import TaxNoteModal from "./patch/TaxNoteModal";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -22,6 +23,15 @@ function formatDate(dateString?: string | null) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(
     d.getMonth() + 1
   ).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+function formatMonthYear(dateStr?: string) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function formatDateTime(ts?: string) {
@@ -46,6 +56,8 @@ export default function BusinessDetails() {
   const [relatedBusinesses, setRelatedBusinesses]: any[] = useState([]);
   const [showAllNotes, setShowAllNotes] = useState(false);
   const [notes, setNotes]: any[] = useState([]);
+  const [editingNote, setEditingNote] = useState<any>(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
   const [activeTaxType, setActiveTaxType] = useState<string | null>(null);
 
@@ -57,6 +69,7 @@ export default function BusinessDetails() {
 
   const [editTaxModalVisible, setEditTaxModalVisible] = useState(false);
   const [fileModalVisible, setFileModalVisible] = useState(false);
+  const [taxNoteModalVisible, setTaxNoteModalVisible] = useState(false);
 
   const [selectedTaxRecord, setSelectedTaxRecord] = useState<any>(null);
   const [activeTaxRecordId, setActiveTaxRecordId] = useState<string | null>(
@@ -70,7 +83,6 @@ export default function BusinessDetails() {
 
   const [user, setUser]: any = useState("");
 
-  // ★ NEW: year filter per tax type
   const [taxYearFilter, setTaxYearFilter] = useState<
     Record<string, string | "ALL">
   >({});
@@ -220,6 +232,36 @@ export default function BusinessDetails() {
     }
   }
 
+  /* ================= EDIT ================= */
+
+  async function handleEditNoteSave() {
+    if (!editingNote) return;
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${API_URL}/api/bClient/${id}/notes/${editingNote.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ note: noteDraft }),
+        }
+      );
+
+      if (!res.ok) throw new Error("Update failed");
+
+      setEditingNote(null);
+      setNoteDraft("");
+      fetchBusiness();
+    } catch (e: any) {
+      alert(e.message || "Update failed");
+    }
+  }
+
   if (loading) return <div className={styles.loading}>Loading…</div>;
   if (err) return <div className={styles.error}>{err}</div>;
   if (!business) return <div className={styles.notFound}>Not found</div>;
@@ -278,7 +320,7 @@ export default function BusinessDetails() {
               />
               <Field
                 label="Fiscal Year End"
-                value={formatDate(business.fiscal_year_end)}
+                value={formatMonthYear(business.fiscal_year_end)}
               />
               <Field
                 label="Ontario Corp #"
@@ -589,6 +631,7 @@ export default function BusinessDetails() {
                                 <th>Date</th>
                                 <th>Confirmation No.</th>
                                 <th>Prepared By</th>
+                                <th>Notes</th>
                                 <th>Files</th>
                                 <th>Actions</th>
                               </tr>
@@ -623,6 +666,17 @@ export default function BusinessDetails() {
                                   <td>{formatDate(r.tax_date)}</td>
                                   <td>{r.confirmation_number}</td>
                                   <td>{r.created_by_name}</td>
+                                  <td>
+                                    <button
+                                      onClick={() => {
+                                        setActiveTaxRecordId(r.id);
+                                        setTaxNoteModalVisible(true);
+                                      }}
+                                    >
+                                      Open
+                                    </button>
+                                  </td>
+
                                   <td>
                                     <button
                                       onClick={() => {
@@ -692,17 +746,67 @@ export default function BusinessDetails() {
                     {(showAllNotes ? notes : notes.slice(0, 5)).map(
                       (note: any) => (
                         <tr key={note.id}>
-                          <td>{note.note_text}</td>
+                          <td>
+                            <td>
+                              {editingNote?.id === note.id ? (
+                                <textarea
+                                  value={noteDraft}
+                                  onChange={(e) => setNoteDraft(e.target.value)}
+                                  rows={2}
+                                  className={styles.noteEditInput}
+                                  autoFocus
+                                />
+                              ) : (
+                                note.note_text
+                              )}
+                            </td>
+                          </td>
                           <td>{note.created_by}</td>
                           <td>{formatDateTime(note.created_at)}</td>
                           <td>
-                            <button
-                              className={styles.deleteBtn}
-                              onClick={() => handleDeleteNote(note.id)}
-                              title="Delete note"
-                            >
-                              <MdDelete size="1rem" />
-                            </button>
+                            <div className={styles.buttonContainer}>
+                              {editingNote?.id === note.id ? (
+                                <>
+                                  <button
+                                    className={styles.editBtn}
+                                    onClick={handleEditNoteSave}
+                                  >
+                                    Save
+                                  </button>
+
+                                  <button
+                                    className={styles.deleteBtn}
+                                    onClick={() => {
+                                      setEditingNote(null);
+                                      setNoteDraft("");
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    className={styles.editBtn}
+                                    title="Edit note"
+                                    onClick={() => {
+                                      setEditingNote(note);
+                                      setNoteDraft(note.note_text);
+                                    }}
+                                  >
+                                    <MdEdit size="1rem" />
+                                  </button>
+
+                                  <button
+                                    className={styles.deleteBtn}
+                                    title="Delete note"
+                                    onClick={() => handleDeleteNote(note.id)}
+                                  >
+                                    <MdDelete size="1rem" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -765,6 +869,18 @@ export default function BusinessDetails() {
           setSelectedTaxRecord(null);
         }}
       />
+
+      {taxNoteModalVisible && activeTaxRecordId && (
+        <TaxNoteModal
+          taxRecordId={activeTaxRecordId}
+          businessId={business.id}
+          onClose={() => setTaxNoteModalVisible(false)}
+          onSaved={() => {
+            fetchBusiness();
+            setTaxNoteModalVisible(false);
+          }}
+        />
+      )}
     </div>
   );
 }
