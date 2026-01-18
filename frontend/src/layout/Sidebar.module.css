@@ -7,12 +7,12 @@
   gap: 3rem;
   height: 100vh;
   flex-direction: column;
-  background-color: #ffffff;
-  color: #000;
+  background-color: #2F3F4C;
+  color:#FFFFFF;
   width: 265px;
   padding: 1rem;
   font-family: "Poppins", sans-serif;
-  border: 1px #f1f1f1 solid;
+ 
 }
 
 .topSection {
@@ -63,8 +63,8 @@
 }
 
 .nav ul li:hover {
-  background-color: #555;
-  color: #fff;
+  background-color: white;
+  color:black;
 }
 
 .active {
@@ -79,12 +79,12 @@
   gap: 0.3rem;
 }
 .footer button {
-  color: #bb2121;
-  background-color: #fff;
+  color: white;
+  background-color: #2F3F4C;
 }
 
 .footer button:hover {
-  border-color: #bb2121;
+  border-color: white;
 }
 
 .footer div,
@@ -100,5 +100,5 @@
 }
 
 .footer div:hover {
-  border: solid 1px #333;
+  border: solid 1px white;
 }

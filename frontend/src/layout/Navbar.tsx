@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import styles from "./Navbar.module.css";
 import { IoNotificationsOutline } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
+import { IoMdContact } from "react-icons/io";
+
 
 const Navbar = () => {
   const [user, setUser]: any = useState(null);
@@ -26,7 +28,7 @@ const Navbar = () => {
         </div>
 
         <div className={styles.profile} onClick={() => navigate("/profile")}>
-          <div className={styles.img}></div>
+          <div className={styles.img}><IoMdContact size="device width" /></div>
 
           <div className={styles.credentials}>
             <p className={styles.user}>{user?.username || "User"}</p>

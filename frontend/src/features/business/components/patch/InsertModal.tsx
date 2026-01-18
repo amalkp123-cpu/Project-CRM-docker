@@ -10,7 +10,7 @@ interface BusinessTaxForm {
   taxPeriod: string;
   amount: string;
   confirmationNumber: string;
-  status: "Pending" | "Filed" | "Paid";
+  status: "PaperReceived" | "InProgress" | "ReadyForReview"|"FiledOn";
   taxDate: string;
   fromDate?: string;
   toDate?: string;
@@ -626,9 +626,10 @@ export default function InsertBusinessResourceModal({
                             })
                           }
                         >
-                          <option value="Draft">Draft</option>
-                          <option value="Filed">Filed</option>
-                          <option value="Paid">Paid</option>
+                          <option value="PaperReceived">PaperReceived</option>
+                          <option value="InProgress">InProgress</option>
+                          <option value="ReadyForReview">ReadyForReview</option>
+                          <option value="FiledOn">FiledOn</option>
                         </select>
                       </div>
                       <div className={styles.formField}>

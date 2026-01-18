@@ -6,7 +6,7 @@
 .table th,
 .table td {
   border-bottom: 1px solid #ddd;
-  padding: 0.8rem 1.2rem;
+  padding: 0.5rem 0.8rem;
   text-align: left;
   font-size: 0.85rem;
 }
@@ -33,10 +33,13 @@
   padding: 0.4rem 1rem;
   font-size: 0.7rem;
   border-radius: 0.8rem;
-  background-color: #ebebeb;
-  color: #555;
+ background-color: #F59E0B1A;
+  color: #F59E0B;
   display: flex;
   width: fit-content;
+  
+
+ 
 }
 
 .filedon span {

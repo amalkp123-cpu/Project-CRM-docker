@@ -283,6 +283,19 @@ export default function PersonalDetails() {
     (tr: any) => tr.id === activeTaxRecordId
   );
 
+//camel case function
+  function toCamelCaseText(str = "") {
+  return str
+    .toString()
+    .trim()
+    .toLowerCase()
+    .split(/[\s_-]+/)           // split by space, _ or -
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+
   return (
     <div className={styles.mainSection}>
       <div className={styles.cardSection}>
@@ -389,6 +402,7 @@ export default function PersonalDetails() {
                     <span className={styles.addressTop}>
                       {[addr.address_line1, addr.address_line2]
                         .filter(Boolean)
+                        .map(toCamelCaseText)
                         .join(", ")}
                     </span>
                     <br />
@@ -400,6 +414,7 @@ export default function PersonalDetails() {
                         addr.country,
                       ]
                         .filter(Boolean)
+                        .map(toCamelCaseText)
                         .join(", ")}
                     </span>
                   </div>
@@ -727,6 +742,7 @@ export default function PersonalDetails() {
                       <span className={styles.addressTop}>
                         {[addr.address_line1, addr.address_line2]
                           .filter(Boolean)
+                          .map(toCamelCaseText)
                           .join(", ")}
                       </span>
                       <br />
@@ -738,6 +754,7 @@ export default function PersonalDetails() {
                           addr.country,
                         ]
                           .filter(Boolean)
+                          .map(toCamelCaseText)
                           .join(", ")}
                       </span>
                     </div>

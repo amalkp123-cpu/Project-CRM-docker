@@ -184,6 +184,7 @@ export default function EditTaxModal({
                     <option value="InProgress">InProgress</option>
                     <option value="ReadyToFile">ReadyToFile</option>
                     <option value="FiledOn">FiledOn</option>
+                    <option value="PaperReceived">PaperReceived</option>
                   </select>
                   {errors.taxStatus && (
                     <div role="alert" className={styles.errorText}>

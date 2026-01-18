@@ -39,7 +39,7 @@ interface Dependent {
 
 interface TaxRecord {
   taxYear: string;
-  status: "InProgress" | "ReadyToFile" | "FiledOn";
+  status: "InProgress" | "ReadyToFile" | "FiledOn"|"PaperReceived";
   taxDate?: string;
   attachment?: string;
   preparedBy?: string;
@@ -1189,13 +1189,16 @@ export default function InsertModal({
                           status: e.target.value as
                             | "InProgress"
                             | "ReadyToFile"
-                            | "FiledOn",
+                            | "FiledOn"
+                            | "PaperReceived"
+
                         })
                       }
                       disabled={loading}
                     >
                       <option value="InProgress">InProgress</option>
                       <option value="ReadyToFile">ReadyToFile</option>
+                     <option value="PaperReceived">PaperReceived</option>
                       <option value="FiledOn">FiledOn</option>
                     </select>
                   </div>
