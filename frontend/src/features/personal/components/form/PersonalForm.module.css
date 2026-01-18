@@ -5,9 +5,24 @@
 }
 
 .bulkButton {
-  width: 20rem;
-  align-self: center;
-  margin: -1.4rem;
+  width: fit-content;
+  align-self: flex-end;
+  position: absolute;
+  top: 2rem;
+  background-color: #00000000;
+  color: #000000;
+  border: 1.5px solid #cccccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.bulkButton:hover {
+  background-color: #565eff;
+  border-color: #565eff;
+  color: #ffffff;
+  cursor: pointer;
 }
 
 .relationSection {

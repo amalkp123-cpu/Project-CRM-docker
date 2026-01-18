@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 import styles from "./PersonalDetails.module.css";
 import PersonalPatchModal from "./patch/PersonalPatchModal";
 import InsertModal from "./patch/InsertModal";

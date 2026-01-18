@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS public.business_clients (
     incorporation_jurisdiction text,
     fiscal_year_end date,
     ontario_corp_number text,
+    contact_name text,
     phone_cell text,
     phone_home text,
     phone_work text,
@@ -238,6 +239,7 @@ CREATE TABLE IF NOT EXISTS public.business_tax_profiles (
     start_quarter smallint CHECK (start_quarter BETWEEN 1 AND 4),
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
+    registeredstatus boolean NULL,
     UNIQUE (business_id, tax_type)
 );
 
@@ -259,6 +261,9 @@ CREATE TABLE IF NOT EXISTS public.business_tax_records (
     status text,
     from_date date,
     to_date date,
+    prepared_by text,
+    slip_information text[],
+    update_renewal date,
     created_by uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),

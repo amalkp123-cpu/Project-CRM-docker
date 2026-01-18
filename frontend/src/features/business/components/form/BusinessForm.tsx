@@ -5,7 +5,7 @@ import BusinessAddressSection from "./BusinessAddressSection";
 import styles from "./BusinessForm.module.css";
 import { useNavigate } from "react-router-dom";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 /* ================= TYPES ================= */
 
@@ -34,12 +34,13 @@ export interface BusinessForm {
   incorporationJurisdiction: string;
   fiscalYearEnd: string;
   fiscalYearEndMonth: string;
-  fiscalYearEndYear: string;
+  fiscalYearEndDay: string;
   ontarioCorpNumber?: string;
 
   addresses: Address[];
   mailingAddress?: Address;
 
+  contactName: string;
   phone1: string;
   phone2?: string;
   phone3?: string;
@@ -51,6 +52,12 @@ export interface BusinessForm {
   createdBy?: string;
 
   shareholders: Shareholder[];
+
+  hstStatus: boolean;
+  corporateStatus: boolean;
+  payrollStatus: boolean;
+  wsibStatus: boolean;
+  annualRenewalStatus: boolean;
 
   hstFrequency?: "monthly" | "quarterly" | "yearly";
   hstStartingDate?: string;
@@ -129,6 +136,7 @@ export default function BusinessForm() {
           postalCode: "",
         },
       ],
+      contactName: "",
       phone1: "",
       phone2: "",
       phone3: "",
@@ -136,31 +144,55 @@ export default function BusinessForm() {
       email: "",
       loyaltySince: "",
       referredBy: "",
+      hstStatus: false,
+      corporateStatus: false,
+      payrollStatus: false,
+      wsibStatus: false,
+      annualRenewalStatus: false,
       shareholders: [],
       notes: [],
     },
   });
 
-  const [user, setUser] = useState<any>(null);
   const [noteFields, setNoteFields] = useState<number[]>([0]);
   const [showMailingAddress, setShowMailingAddress] = useState(false);
 
   const incorporationJurisdiction = watch("incorporationJurisdiction");
   const isFederation = incorporationJurisdiction === "Federal";
 
-  /* ================= USER PREFILL ================= */
+  const hstStatus = watch("hstStatus");
+  const payrollStatus = watch("payrollStatus");
+  const wsibStatus = watch("wsibStatus");
+  const annualRenewalStatus = watch("annualRenewalStatus");
+
+  /* ================= ANNUAL RENEWAL PREFILL ================= */
+  const incorporationDate = watch("incorporationDate");
 
   useEffect(() => {
-    const u =
-      JSON.parse(localStorage.getItem("user") || "null") ||
-      JSON.parse(sessionStorage.getItem("user") || "null");
+    if (isFederation && incorporationDate) {
+      const d = new Date(incorporationDate);
+      d.setFullYear(d.getFullYear() + 1);
 
-    setUser(u);
-
-    if (u?.username || user?.username) {
-      setValue("createdBy", u.username ? u.username : u.full_name);
+      setValue("annualRenewalDate", d.toISOString().slice(0, 10), {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
     }
-  }, [setValue]);
+  }, [isFederation, incorporationDate, setValue]);
+
+  useEffect(() => {
+    if (isFederation) {
+      setValue("annualRenewalStatus", true, {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
+    } else {
+      setValue("annualRenewalStatus", false, {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+  }, [isFederation, setValue]);
 
   /* ================= NOTES ================= */
 
@@ -175,17 +207,17 @@ export default function BusinessForm() {
       const token = localStorage.getItem("token");
 
       const fiscalYearEnd =
-        data.fiscalYearEndYear && data.fiscalYearEndMonth
+        data.fiscalYearEndDay && data.fiscalYearEndMonth
           ? new Date(
-              Number(data.fiscalYearEndYear),
-              Number(data.fiscalYearEndMonth), // next month
-              0 // day 0 = last day of prev month
+              2000,
+              Number(data.fiscalYearEndMonth) - 1,
+              Number(data.fiscalYearEndDay)
             )
               .toISOString()
-              .slice(0, 10) // YYYY-MM-DD
+              .slice(0, 10)
           : "";
 
-      const { fiscalYearEndMonth, fiscalYearEndYear, ...rest } = data;
+      const { fiscalYearEndMonth, fiscalYearEndDay, ...rest } = data;
 
       const payload = {
         ...rest,
@@ -330,7 +362,6 @@ export default function BusinessForm() {
                 </option>
                 <option value="Federal">Federal</option>
                 <option value="Provincial">Provincial</option>
-                <option value="Other">Other</option>
               </select>
               {errors.incorporationJurisdiction && (
                 <div role="alert" className={styles.errorText}>
@@ -343,6 +374,22 @@ export default function BusinessForm() {
               <label>Fiscal Year End *</label>
 
               <div className={styles.inlineFields}>
+                <select
+                  {...register("fiscalYearEndDay", {
+                    required: "Day required",
+                  })}
+                >
+                  <option value="">Day</option>
+                  {Array.from({ length: 31 }, (_, i) => {
+                    const d = String(i + 1).padStart(2, "0");
+                    return (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    );
+                  })}
+                </select>
+
                 <select
                   {...register("fiscalYearEndMonth", {
                     required: "Month required",
@@ -367,22 +414,6 @@ export default function BusinessForm() {
                       {m}
                     </option>
                   ))}
-                </select>
-
-                <select
-                  {...register("fiscalYearEndYear", {
-                    required: "Year required",
-                  })}
-                >
-                  <option value="">Year</option>
-                  {Array.from({ length: 10 }, (_, i) => {
-                    const y = new Date().getFullYear() + i;
-                    return (
-                      <option key={y} value={y}>
-                        {y}
-                      </option>
-                    );
-                  })}
                 </select>
               </div>
             </div>
@@ -492,6 +523,25 @@ export default function BusinessForm() {
 
           <div className={styles.formRow}>
             <div className={styles.formField}>
+              <label htmlFor="contactName">Contact Name *</label>
+              <input
+                id="contactName"
+                type="text"
+                placeholder="John Doe"
+                {...register("contactName", {
+                  required: "Contact name is required",
+                  validate: (val) =>
+                    val.trim().length >= 2 || "Enter a valid contact name",
+                })}
+                aria-invalid={!!errors.contactName}
+              />
+              {errors.contactName && (
+                <div role="alert" className={styles.errorText}>
+                  {errors.contactName.message}
+                </div>
+              )}
+            </div>
+            <div className={styles.formField}>
               <label htmlFor="phone1">Phone 1 (Cell) *</label>
               <input
                 id="phone1"
@@ -521,7 +571,9 @@ export default function BusinessForm() {
                 </div>
               )}
             </div>
+          </div>
 
+          <div className={styles.formRow}>
             <div className={styles.formField}>
               <label htmlFor="phone2">Phone 2 (Home)</label>
               <input
@@ -554,9 +606,6 @@ export default function BusinessForm() {
                 </div>
               )}
             </div>
-          </div>
-
-          <div className={styles.formRow}>
             <div className={styles.formField}>
               <label htmlFor="phone3">Phone 3 (Work)</label>
               <input
@@ -589,7 +638,9 @@ export default function BusinessForm() {
                 </div>
               )}
             </div>
+          </div>
 
+          <div className={styles.formRow}>
             <div className={styles.formField}>
               <label htmlFor="fax">Fax</label>
               <input
@@ -612,9 +663,6 @@ export default function BusinessForm() {
                 </div>
               )}
             </div>
-          </div>
-
-          <div className={styles.formRow}>
             <div className={styles.formField}>
               <label htmlFor="email">Email *</label>
               <input
@@ -661,18 +709,6 @@ export default function BusinessForm() {
               />
             </div>
           </div>
-
-          <div className={styles.formRow}>
-            <div className={styles.formField}>
-              <label htmlFor="createdBy">Created By</label>
-              <input
-                id="createdBy"
-                {...register("createdBy")}
-                readOnly
-                disabled
-              />
-            </div>
-          </div>
         </section>
 
         {/* <ShareholdersList
@@ -688,45 +724,33 @@ export default function BusinessForm() {
 
           <div className={styles.formRow}>
             <div className={styles.formField}>
-              <label htmlFor="hstFrequency">Filing Frequency</label>
-              <select id="hstFrequency" {...register("hstFrequency")}>
-                <option value="">Select frequency</option>
-                <option value="Monthly">Monthly</option>
-                <option value="Quarterly">Quarterly</option>
-                <option value="Yearly">Yearly</option>
+              <label>Registration Status</label>
+              <select
+                {...register("hstStatus", { setValueAs: (v) => v === "true" })}
+              >
+                <option value="false">Not Registered</option>
+                <option value="true">Registered</option>
               </select>
             </div>
-          </div>
-        </section>
 
-        <section className={styles.formSection}>
-          <h3>Corporate Tax Details</h3>
-
-          <div className={styles.formRow}>
-            <div className={styles.formField}>
-              <label htmlFor="corpoStartingYear">Starting Year</label>
-              <input
-                id="corpoStartingYear"
-                type="number"
-                min="1900"
-                max="2100"
-                placeholder="2024"
-                {...register("corpoStartingYear", {
-                  validate: (v) => {
-                    if (!v) return true;
-                    const year = Number(v);
-                    if (year >= 1900 && year <= 2100) return true;
-                    return "Enter a valid year";
-                  },
-                })}
-                aria-invalid={!!errors.corpoStartingYear}
-              />
-              {errors.corpoStartingYear && (
-                <div role="alert" className={styles.errorText}>
-                  {errors.corpoStartingYear.message}
-                </div>
-              )}
-            </div>
+            {hstStatus && (
+              <div className={styles.formField}>
+                <label htmlFor="hstFrequency">Filing Frequency *</label>
+                <select
+                  id="hstFrequency"
+                  {...register("hstFrequency", {
+                    required: hstStatus
+                      ? "Filing frequency is required"
+                      : false,
+                  })}
+                >
+                  <option value="">Select frequency</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Quarterly">Quarterly</option>
+                  <option value="Yearly">Yearly</option>
+                </select>
+              </div>
+            )}
           </div>
         </section>
 
@@ -735,29 +759,38 @@ export default function BusinessForm() {
 
           <div className={styles.formRow}>
             <div className={styles.formField}>
-              <label htmlFor="payrollStartingYear">Starting Year</label>
-              <input
-                id="payrollStartingYear"
-                type="number"
-                min="1900"
-                max="2100"
-                placeholder="2024"
-                {...register("payrollStartingYear", {
-                  validate: (v) => {
-                    if (!v) return true;
-                    const year = Number(v);
-                    if (year >= 1900 && year <= 2100) return true;
-                    return "Enter a valid year";
-                  },
+              <label>Registration Status</label>
+              <select
+                {...register("payrollStatus", {
+                  setValueAs: (v) => v === "true",
                 })}
-                aria-invalid={!!errors.payrollStartingYear}
-              />
-              {errors.payrollStartingYear && (
-                <div role="alert" className={styles.errorText}>
-                  {errors.payrollStartingYear.message}
-                </div>
-              )}
+              >
+                <option value="false">Not Registered</option>
+                <option value="true">Registered</option>
+              </select>
             </div>
+            {payrollStatus && (
+              <div className={styles.formField}>
+                <label htmlFor="payrollStartingYear">Starting Year *</label>
+                <input
+                  id="payrollStartingYear"
+                  type="number"
+                  min="1900"
+                  max="2100"
+                  placeholder="2024"
+                  {...register("payrollStartingYear", {
+                    required: payrollStatus
+                      ? "Starting year is required"
+                      : false,
+                    validate: (v) => {
+                      if (!v) return true;
+                      const year = Number(v);
+                      return (year >= 1900 && year <= 2100) || "Invalid year";
+                    },
+                  })}
+                />
+              </div>
+            )}
           </div>
         </section>
 
@@ -766,44 +799,45 @@ export default function BusinessForm() {
 
           <div className={styles.formRow}>
             <div className={styles.formField}>
-              <label htmlFor="wsibStartingQuarter">Starting Quarter</label>
+              <label>Registration Status</label>
               <select
-                id="wsibStartingQuarter"
-                {...register("wsibStartingQuarter")}
+                {...register("wsibStatus", { setValueAs: (v) => v === "true" })}
               >
-                <option value="">Select quarter</option>
-                <option value="Q1">Q1 (Jan-Mar)</option>
-                <option value="Q2">Q2 (Apr-Jun)</option>
-                <option value="Q3">Q3 (Jul-Sep)</option>
-                <option value="Q4">Q4 (Oct-Dec)</option>
+                <option value="false">Not Registered</option>
+                <option value="true">Registered</option>
               </select>
             </div>
-
-            <div className={styles.formField}>
-              <label htmlFor="wsibStartingYear">Starting Year</label>
-              <input
-                id="wsibStartingYear"
-                type="number"
-                min="1900"
-                max="2100"
-                placeholder="2024"
-                {...register("wsibStartingYear", {
-                  validate: (v) => {
-                    if (!v) return true;
-                    const year = Number(v);
-                    if (year >= 1900 && year <= 2100) return true;
-                    return "Enter a valid year";
-                  },
-                })}
-                aria-invalid={!!errors.wsibStartingYear}
-              />
-              {errors.wsibStartingYear && (
-                <div role="alert" className={styles.errorText}>
-                  {errors.wsibStartingYear.message}
-                </div>
-              )}
-            </div>
           </div>
+
+          {wsibStatus && (
+            <div className={styles.formRow}>
+              <div className={styles.formField}>
+                <label htmlFor="wsibStartingQuarter">Starting Quarter *</label>
+                <select
+                  {...register("wsibStartingQuarter", {
+                    required: wsibStatus ? "Quarter is required" : false,
+                  })}
+                >
+                  <option value="">Select quarter</option>
+                  <option value="Q1">Q1</option>
+                  <option value="Q2">Q2</option>
+                  <option value="Q3">Q3</option>
+                  <option value="Q4">Q4</option>
+                </select>
+              </div>
+
+              <div className={styles.formField}>
+                <label htmlFor="wsibStartingYear">Starting Year *</label>
+                <input
+                  id="wsibStartingYear"
+                  type="number"
+                  {...register("wsibStartingYear", {
+                    required: wsibStatus ? "Starting year is required" : false,
+                  })}
+                />
+              </div>
+            </div>
+          )}
         </section>
 
         {isFederation && (
