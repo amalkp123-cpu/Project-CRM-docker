@@ -10,7 +10,9 @@ import type { Dependent } from "./DependantsList";
 import type { Address } from "./AddressSection";
 import styles from "./PersonalForm.module.css";
 import { useNavigate } from "react-router-dom";
-const API_URL = import.meta.env.VITE_API_URL;
+
+import { MdOutlineFileUpload } from "react-icons/md";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 export interface ClientForm {
   firstName: string;
@@ -275,6 +277,7 @@ export default function PersonalForm() {
             className={styles.bulkButton}
             type="button"
           >
+            <MdOutlineFileUpload size={"1.5rem"} />
             Bulk Upload
           </button>
         )}

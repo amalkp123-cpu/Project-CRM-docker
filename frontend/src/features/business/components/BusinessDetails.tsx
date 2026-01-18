@@ -9,7 +9,7 @@ import EditTaxModal from "./patch/EditTaxModal";
 import FileViewModal from "./files/FileViewModal";
 import TaxNoteModal from "./patch/TaxNoteModal";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 function truthy(v: any) {
   ``;
@@ -306,7 +306,7 @@ export default function BusinessDetails() {
           </div>
 
           {/* ================= BUSINESS ================= */}
-          <Section title="Business">
+          <Section title="Business Details">
             <Grid>
               <Field label="Business Number" value={business.business_number} />
               <Field label="Type" value={business.business_type} />
@@ -336,6 +336,68 @@ export default function BusinessDetails() {
                 value={formatDate(business.loyalty_since)}
               />
               <Field label="Referred By" value={business.referred_by} />
+            </Grid>
+          </Section>
+
+          {/* ================= BASIC ================= */}
+          <Section title="Basic Information">
+            <Grid>
+              <Field
+                label="Contact Name"
+                value={business.contact_name || "—"}
+              />
+
+              <Field
+                label="HST Registration"
+                value={
+                  taxProfiles.find((p: any) => p.tax_type === "HST")
+                    ?.registeredstatus
+                    ? "Registered"
+                    : "Not Registered"
+                }
+              />
+
+              <Field
+                label="Corporation Registration"
+                value={
+                  taxProfiles.find((p: any) => p.tax_type === "CORPORATION")
+                    ?.registeredstatus
+                    ? "Registered"
+                    : "Not Registered"
+                }
+              />
+
+              <Field
+                label="Payroll Registration"
+                value={
+                  taxProfiles.find((p: any) => p.tax_type === "PAYROLL")
+                    ?.registeredstatus
+                    ? "Registered"
+                    : "Not Registered"
+                }
+              />
+
+              <Field
+                label="WSIB Registration"
+                value={
+                  taxProfiles.find((p: any) => p.tax_type === "WSIB")
+                    ?.registeredstatus
+                    ? "Registered"
+                    : "Not Registered"
+                }
+              />
+
+              <Field
+                label="Annual Renewal Date"
+                value={(() => {
+                  const ar = taxProfiles.find(
+                    (p: any) => p.tax_type === "ANNUAL_RENEWAL"
+                  );
+                  if (!ar || !ar.registeredstatus) return "Not Registered";
+                  if (!ar.start_date) return "Registered";
+                  return new Date(ar.start_date).toLocaleDateString();
+                })()}
+              />
             </Grid>
           </Section>
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import styles from "./InsertModal.module.css";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 type TaxType = "HST" | "CORPORATION" | "PAYROLL" | "WSIB" | "ANNUAL_RENEWAL";
 
@@ -10,10 +10,14 @@ interface BusinessTaxForm {
   taxPeriod: string;
   amount: string;
   confirmationNumber: string;
-  status: "Pending" | "Filed" | "Paid";
+  status: "InProgress" | "ReadyForReview" | "PaperRecieved" | "FiledOn";
   taxDate: string;
   fromDate?: string;
   toDate?: string;
+  notes?: string;
+  preparedBy: string;
+  slips?: string[];
+  updateRenewal?: string;
 }
 
 interface Note {
@@ -93,10 +97,14 @@ export default function InsertBusinessResourceModal({
     taxPeriod: "",
     amount: "",
     confirmationNumber: "",
-    status: "Pending",
+    status: "InProgress",
     taxDate: "",
     fromDate: "",
     toDate: "",
+    preparedBy: "",
+    notes: "",
+    slips: [],
+    updateRenewal: "",
   });
 
   type ShareholderMode = "existing" | "new" | "basic";
@@ -248,6 +256,15 @@ export default function InsertBusinessResourceModal({
     return String(profile.frequency).toLowerCase();
   }
 
+  function toggleSlip(type: string) {
+    setForm((f) => ({
+      ...f,
+      slips: f.slips?.includes(type)
+        ? f.slips.filter((s) => s !== type)
+        : [...(f.slips || []), type],
+    }));
+  }
+
   /* ================= TAX PROFILE RESOLUTION ================= */
 
   useEffect(() => {
@@ -280,8 +297,14 @@ export default function InsertBusinessResourceModal({
           : "",
       amount: "",
       confirmationNumber: "",
-      status: "Pending",
+      status: "InProgress",
       taxDate: "",
+      preparedBy: "",
+      fromDate: "",
+      toDate: "",
+      notes: "",
+      slips: [],
+      updateRenewal: "",
     });
   }, [activeTaxTab, taxProfiles, visible]);
 
@@ -293,10 +316,14 @@ export default function InsertBusinessResourceModal({
       taxPeriod: "",
       amount: "",
       confirmationNumber: "",
-      status: "Pending",
+      status: "InProgress",
       taxDate: "",
       fromDate: "",
       toDate: "",
+      preparedBy: "",
+      notes: "",
+      slips: [],
+      updateRenewal: "",
     });
     setTaxRecordCreated(false);
     setCreatedTaxRecordId(null);
@@ -314,9 +341,22 @@ export default function InsertBusinessResourceModal({
       return;
     }
 
-    if (!form.taxYear) {
+    // Tax year is NOT required for ANNUAL_RENEWAL
+    if (activeTaxTab !== "ANNUAL_RENEWAL" && !form.taxYear) {
       alert("Tax year is required");
       return;
+    }
+
+    // If status is FiledOn, require amount and confirmation number
+    if (form.status === "FiledOn") {
+      if (!form.amount) {
+        alert("Amount is required when status is FiledOn");
+        return;
+      }
+      if (!form.confirmationNumber) {
+        alert("Confirmation number is required when status is FiledOn");
+        return;
+      }
     }
 
     setLoading(true);
@@ -332,9 +372,13 @@ export default function InsertBusinessResourceModal({
         amount: form.amount !== "" ? Number(form.amount) : null,
         confirmation_number: form.confirmationNumber || null,
         status: form.status,
-        created_by: user?.id || null,
         from_date: form.fromDate || null,
         to_date: form.toDate || null,
+        note: form.notes || null,
+        prepared_by: form.preparedBy || null,
+        slip_information:
+          form.slips && form.slips.length > 0 ? form.slips : null,
+        update_renewal: form.updateRenewal || null,
       };
 
       const res = await fetch(
@@ -424,9 +468,20 @@ export default function InsertBusinessResourceModal({
 
     // tax tab
     if (taxRecordCreated) {
+      // Only show upload if status is FiledOn
+      if (form.status === "FiledOn") {
+        return {
+          label: "Upload Document",
+          onClick: handleUploadDocument,
+        };
+      }
+      // If not FiledOn, just close
       return {
-        label: "Upload Document",
-        onClick: handleUploadDocument,
+        label: "Done",
+        onClick: () => {
+          onSuccess();
+          handleClose();
+        },
       };
     }
 
@@ -514,106 +569,224 @@ export default function InsertBusinessResourceModal({
                   ) : (
                     <div className={styles.form}>
                       <h3>{activeTaxTab} Tax Record</h3>
-                      <div className={styles.formField}>
-                        <label>Frequency</label>
-                        <input
-                          value={
-                            activeProfile.frequency != "null"
-                              ? activeProfile.frequency
-                              : "annual"
-                          }
-                          disabled
-                        />
-                      </div>
-                      <div className={styles.formField}>
-                        <label>Tax Year *</label>
-                        <input
-                          value={form.taxYear}
-                          onChange={(e) =>
-                            setForm({ ...form, taxYear: e.target.value })
-                          }
-                        />
-                      </div>
-                      {activeProfile.frequency === "quarterly" && (
-                        <div className={styles.formField}>
-                          <label>Quarter</label>
-                          <select
-                            value={form.taxPeriod}
-                            onChange={(e) =>
-                              setForm({
-                                ...form,
-                                taxPeriod: e.target.value,
-                              })
-                            }
-                          >
-                            <option value="Q1">Q1</option>
-                            <option value="Q2">Q2</option>
-                            <option value="Q3">Q3</option>
-                            <option value="Q4">Q4</option>
-                          </select>
-                        </div>
-                      )}
 
-                      {activeTaxTab === "HST" &&
-                        activeProfile.frequency === "quarterly" && (
-                          <>
+                      {/* ================= HST ================= */}
+                      {activeTaxTab === "HST" && (
+                        <>
+                          <div className={styles.formField}>
+                            <label>Frequency</label>
+                            <input value={activeProfile.frequency} disabled />
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>Tax Year *</label>
+                            <input
+                              value={form.taxYear}
+                              onChange={(e) =>
+                                setForm({ ...form, taxYear: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          {activeProfile.frequency === "monthly" && (
                             <div className={styles.formField}>
-                              <label>From Date *</label>
-                              <input
-                                type="date"
-                                value={form.fromDate}
+                              <label>Month</label>
+                              <select
+                                value={form.taxPeriod}
                                 onChange={(e) =>
                                   setForm({
                                     ...form,
-                                    fromDate: e.target.value,
+                                    taxPeriod: e.target.value,
                                   })
                                 }
-                              />
+                              >
+                                {MONTHS.map((m) => (
+                                  <option key={m} value={m}>
+                                    {m}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
+                          )}
 
+                          {activeProfile.frequency === "quarterly" && (
                             <div className={styles.formField}>
-                              <label>To Date *</label>
-                              <input
-                                type="date"
-                                value={form.toDate}
+                              <label>Quarter</label>
+                              <select
+                                value={form.taxPeriod}
                                 onChange={(e) =>
                                   setForm({
                                     ...form,
-                                    toDate: e.target.value,
+                                    taxPeriod: e.target.value,
                                   })
                                 }
-                              />
+                              >
+                                <option value="Q1">Q1</option>
+                                <option value="Q2">Q2</option>
+                                <option value="Q3">Q3</option>
+                                <option value="Q4">Q4</option>
+                              </select>
                             </div>
-                          </>
-                        )}
+                          )}
 
-                      {activeProfile?.frequency === "monthly" && (
-                        <div className={styles.formField}>
-                          <label>Month</label>
-                          <select
-                            value={form.taxPeriod}
-                            onChange={(e) =>
-                              setForm({ ...form, taxPeriod: e.target.value })
-                            }
-                          >
-                            {MONTHS.map((m) => (
-                              <option key={m} value={m}>
-                                {m}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                          <div className={styles.formField}>
+                            <label>From Date</label>
+                            <input
+                              type="date"
+                              value={form.fromDate}
+                              onChange={(e) =>
+                                setForm({ ...form, fromDate: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>To Date</label>
+                            <input
+                              type="date"
+                              value={form.toDate}
+                              onChange={(e) =>
+                                setForm({ ...form, toDate: e.target.value })
+                              }
+                            />
+                          </div>
+                        </>
                       )}
-                      <div className={styles.formField}>
-                        <label>Amount</label>
-                        <input
-                          type="number"
-                          value={form.amount}
-                          onChange={(e) =>
-                            setForm({ ...form, amount: e.target.value })
-                          }
-                        />
-                      </div>
+
+                      {/* ================= CORPORATION ================= */}
+                      {activeTaxTab === "CORPORATION" && (
+                        <>
+                          <div className={styles.formField}>
+                            <label>Frequency</label>
+                            <input value="Annual" disabled />
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>Tax Year *</label>
+                            <input
+                              value={form.taxYear}
+                              onChange={(e) =>
+                                setForm({ ...form, taxYear: e.target.value })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {/* ================= PAYROLL ================= */}
+                      {activeTaxTab === "PAYROLL" && (
+                        <>
+                          <div className={styles.formField}>
+                            <label>Tax Year *</label>
+                            <input
+                              value={form.taxYear}
+                              onChange={(e) =>
+                                setForm({ ...form, taxYear: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>Slip Information</label>
+                            <div>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={form.slips?.includes("T4")}
+                                  onChange={() => toggleSlip("T4")}
+                                />{" "}
+                                T4
+                              </label>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={form.slips?.includes("T5")}
+                                  onChange={() => toggleSlip("T5")}
+                                />{" "}
+                                T5
+                              </label>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={form.slips?.includes("T4A")}
+                                  onChange={() => toggleSlip("T4A")}
+                                />{" "}
+                                T4A
+                              </label>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* ================= WSIB ================= */}
+                      {activeTaxTab === "WSIB" && (
+                        <>
+                          <div className={styles.formField}>
+                            <label>Frequency</label>
+                            <input value="Quarterly" disabled />
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>Quarter</label>
+                            <select
+                              value={form.taxPeriod}
+                              onChange={(e) =>
+                                setForm({ ...form, taxPeriod: e.target.value })
+                              }
+                            >
+                              <option value="Q1">Q1</option>
+                              <option value="Q2">Q2</option>
+                              <option value="Q3">Q3</option>
+                              <option value="Q4">Q4</option>
+                            </select>
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>Tax Year *</label>
+                            <input
+                              value={form.taxYear}
+                              onChange={(e) =>
+                                setForm({ ...form, taxYear: e.target.value })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {/* ================= ANNUAL RENEWAL ================= */}
+                      {activeTaxTab === "ANNUAL_RENEWAL" && (
+                        <>
+                          <div className={styles.formField}>
+                            <label>Current Renewal Date</label>
+                            <input
+                              value={
+                                activeProfile.start_date
+                                  ? new Date(
+                                      activeProfile.start_date
+                                    ).toLocaleDateString("en-CA")
+                                  : ""
+                              }
+                              disabled
+                            />
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>Update Renewal Date</label>
+                            <input
+                              type="date"
+                              value={form.updateRenewal}
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  updateRenewal: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {/* ================= COMMON (ALL TAX TYPES) ================= */}
                       <div className={styles.formField}>
                         <label>Status</label>
                         <select
@@ -626,33 +799,74 @@ export default function InsertBusinessResourceModal({
                             })
                           }
                         >
-                          <option value="Draft">Draft</option>
-                          <option value="Filed">Filed</option>
-                          <option value="Paid">Paid</option>
+                          <option value="InProgress">InProgress</option>
+                          <option value="ReadyForReview">ReadyForReview</option>
+                          <option value="PaperRecieved">PaperRecieved</option>
+                          <option value="FiledOn">FiledOn</option>
                         </select>
                       </div>
+
+                      {/* Show Amount and Confirmation Number only when FiledOn */}
+                      {form.status === "FiledOn" && (
+                        <>
+                          <div className={styles.formField}>
+                            <label>Amount *</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              required
+                              value={form.amount}
+                              onChange={(e) =>
+                                setForm({ ...form, amount: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className={styles.formField}>
+                            <label>Confirmation Number *</label>
+                            <input
+                              required
+                              value={form.confirmationNumber}
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  confirmationNumber: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+
                       <div className={styles.formField}>
-                        <label>Confirmation Number</label>
-                        <input
-                          value={form.confirmationNumber}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              confirmationNumber: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className={styles.formField}>
-                        <label>Filing Date</label>
+                        <label>Filing Date*</label>
                         <input
                           type="date"
                           value={form.taxDate}
+                          required
                           onChange={(e) =>
-                            setForm({
-                              ...form,
-                              taxDate: e.target.value,
-                            })
+                            setForm({ ...form, taxDate: e.target.value })
+                          }
+                        />
+                      </div>
+
+                      <div className={styles.formField}>
+                        <label>Prepared By*</label>
+                        <input
+                          value={form.preparedBy}
+                          required
+                          onChange={(e) =>
+                            setForm({ ...form, preparedBy: e.target.value })
+                          }
+                        />
+                      </div>
+
+                      <div className={styles.formField}>
+                        <label>Notes</label>
+                        <textarea
+                          value={form.notes}
+                          onChange={(e) =>
+                            setForm({ ...form, notes: e.target.value })
                           }
                         />
                       </div>
@@ -661,18 +875,29 @@ export default function InsertBusinessResourceModal({
                 </>
               ) : (
                 <div className={styles.form}>
-                  <h3>Upload Filing Document</h3>
-
-                  <div className={styles.formField}>
-                    <label>PDF Attachment *</label>
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      onChange={(e) =>
-                        e.target.files && setSelectedFile(e.target.files[0])
-                      }
-                    />
-                  </div>
+                  {form.status === "FiledOn" ? (
+                    <>
+                      <h3>Upload Filing Document</h3>
+                      <div className={styles.formField}>
+                        <label>PDF Attachment *</label>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) =>
+                            e.target.files && setSelectedFile(e.target.files[0])
+                          }
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3>Tax Record Created Successfully</h3>
+                      <p>
+                        The tax record has been created. You can close this
+                        dialog now.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -845,7 +1070,7 @@ export default function InsertBusinessResourceModal({
                     value={shareholderForm.share_percentage}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (Number(v) > 100) return; // hard stop
+                      if (Number(v) > 100) return;
                       setShareholderForm({
                         ...shareholderForm,
                         share_percentage: v,
@@ -890,16 +1115,18 @@ export default function InsertBusinessResourceModal({
             Cancel
           </button>
 
-          {activeTab === "tax" && taxRecordCreated && (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={handleSkipUpload}
-              disabled={loading}
-            >
-              Skip for now
-            </button>
-          )}
+          {activeTab === "tax" &&
+            taxRecordCreated &&
+            form.status !== "FiledOn" && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={handleSkipUpload}
+                disabled={loading}
+              >
+                Skip for now
+              </button>
+            )}
 
           <button
             type="button"

@@ -59,6 +59,7 @@ async function listClients(req, res) {
         bc.business_number,
         bc.business_type,
         bc.email,
+        bc.contact_name,
         bc.phone_cell,
         bc.created_at
       FROM business_clients bc
@@ -116,6 +117,7 @@ async function createBusiness(req, res) {
         incorporation_jurisdiction,
         fiscal_year_end,
         ontario_corp_number,
+        contact_name,
         phone_cell,
         phone_home,
         phone_work,
@@ -131,7 +133,7 @@ async function createBusiness(req, res) {
       VALUES (
         $1,$2,$3,$4,$5,$6,$7,
         $8,$9,$10,$11,$12,
-        $13,$14,$15,$16,$17,$18
+        $13,$14,$15,$16,$17,$18,$19
       )
       RETURNING id
       `,
@@ -143,6 +145,7 @@ async function createBusiness(req, res) {
         payload.incorporationJurisdiction,
         nullify(payload.fiscalYearEnd),
         nullify(payload.ontarioCorpNumber),
+        nullify(payload.contactName),
         nullify(payload.phone1),
         nullify(payload.phone2),
         nullify(payload.phone3),
@@ -252,7 +255,7 @@ async function createBusiness(req, res) {
     const currentYear = new Date().getFullYear();
 
     /* === HST === */
-    if (payload.hstFrequency || payload.hstStartingDate) {
+    if (payload.hstStatus === true) {
       const frequency = payload.hstFrequency
         ? payload.hstFrequency.toLowerCase()
         : "quarterly"; // default quarterly
@@ -261,16 +264,10 @@ async function createBusiness(req, res) {
         key: "hst",
         frequency,
       });
-    } else {
-      // Default HST profile if none provided
-      profiles.push({
-        key: "hst",
-        frequency: "quarterly",
-      });
     }
 
     /* === CORPORATION === */
-    if (payload.corpoStartingYear) {
+    if (payload.corporateStatus === true) {
       profiles.push({
         key: "corporate",
         start_year: payload.corpoStartingYear,
@@ -278,44 +275,31 @@ async function createBusiness(req, res) {
     } else {
       profiles.push({
         key: "corporate",
-        start_year: currentYear,
+        start_date: payload.incorporationDate,
       });
     }
 
     /* === PAYROLL === */
-    if (payload.payrollStartingYear) {
+    if (payload.payrollStatus === true) {
       profiles.push({
         key: "payroll",
         start_year: payload.payrollStartingYear,
         frequency: "monthly",
       });
-    } else {
-      profiles.push({
-        key: "payroll",
-        start_year: currentYear,
-        frequency: "monthly", // default monthly
-      });
     }
 
     /* === WSIB === */
-    if (payload.wsibStartingYear || payload.wsibStartingQuarter) {
+    if (payload.wsibStatus === true) {
       profiles.push({
         key: "wsib",
         start_year: nullify(payload.wsibStartingYear),
         start_quarter: normalizeQuarter(payload.wsibStartingQuarter),
         frequency: "quarterly",
       });
-    } else {
-      profiles.push({
-        key: "wsib",
-        start_year: currentYear,
-        start_quarter: 1,
-        frequency: "quarterly", // default quarterly
-      });
     }
 
     /* === ANNUAL RENEWAL === */
-    if (payload.annualRenewalDate) {
+    if (payload.annualRenewalStatus === true) {
       profiles.push({
         key: "annualRenewal",
         start_date: nullify(payload.annualRenewalDate),
@@ -338,10 +322,11 @@ async function createBusiness(req, res) {
       start_date,
       start_year,
       start_quarter,
+      registeredstatus,
       created_at,
       updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
     `,
         [
           businessId,
@@ -350,6 +335,7 @@ async function createBusiness(req, res) {
           p.start_date || null,
           p.start_year || null,
           p.start_quarter || null,
+          true,
           now,
           now,
         ]
@@ -487,6 +473,7 @@ async function getBusiness(req, res) {
           bc.business_name,
           bc.business_number,
           bc.email,
+          bc.contact_name,
           bc.phone_cell
         FROM business_clients bc
         JOIN business_shareholders bs ON bs.business_id = bc.id
@@ -744,37 +731,43 @@ async function patchBusiness(req, res) {
 
     if (Array.isArray(payload.taxProfiles)) {
       for (const tp of payload.taxProfiles) {
-        const cols = [];
-        const vals = [];
-
-        if (tp.frequency !== undefined) {
-          cols.push(`frequency = $${vals.length + 1}`);
-          vals.push(tp.frequency ?? null);
-        }
-        if (tp.start_date !== undefined) {
-          cols.push(`start_date = $${vals.length + 1}`);
-          vals.push(tp.start_date ?? null);
-        }
-        if (tp.start_year !== undefined) {
-          cols.push(`start_year = $${vals.length + 1}`);
-          vals.push(tp.start_year ?? null);
-        }
-        if (tp.start_quarter !== undefined) {
-          cols.push(`start_quarter = $${vals.length + 1}`);
-          vals.push(tp.start_quarter ?? null);
+        if (tp.registeredstatus !== true && tp.registeredstatus !== false) {
+          continue; // ignore garbage
         }
 
-        if (cols.length) {
-          vals.push(tp.id);
-          await conn.query(
-            `
-            UPDATE business_tax_profiles
-            SET ${cols.join(", ")}, updated_at = now()
-            WHERE id = $${vals.length}
-            `,
-            vals
-          );
-        }
+        await conn.query(
+          `
+      INSERT INTO business_tax_profiles (
+        business_id,
+        tax_type,
+        frequency,
+        start_date,
+        start_year,
+        start_quarter,
+        registeredstatus,
+        created_at,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,now(),now())
+      ON CONFLICT (business_id, tax_type)
+      DO UPDATE SET
+        registeredstatus = EXCLUDED.registeredstatus,
+        frequency        = EXCLUDED.frequency,
+        start_date       = EXCLUDED.start_date,
+        start_year       = EXCLUDED.start_year,
+        start_quarter    = EXCLUDED.start_quarter,
+        updated_at       = now()
+      `,
+          [
+            id,
+            tp.tax_type,
+            tp.frequency ?? null,
+            tp.start_date ?? null,
+            tp.start_year ?? null,
+            tp.start_quarter ?? null,
+            tp.registeredstatus,
+          ]
+        );
       }
     }
 
@@ -819,25 +812,61 @@ async function createTaxRecord(req, res) {
     amount,
     confirmation_number,
     status,
-    created_by,
     from_date,
     to_date,
+    note,
+    slip_information,
+    update_renewal,
+    prepared_by,
   } = req.body;
 
-  if (!businessId || !tax_type || !tax_year) {
+  if (!businessId || !tax_type) {
     return res.status(400).json({ error: "missing_required_fields" });
   }
 
-  const year = Number(tax_year);
-  if (!Number.isInteger(year) || year < 1900 || year > 2100) {
-    return res.status(400).json({ error: "invalid_tax_year" });
+  // Tax year is only required for non-ANNUAL_RENEWAL types
+  if (tax_type !== "ANNUAL_RENEWAL" && !tax_year) {
+    return res.status(400).json({ error: "tax_year_required" });
+  }
+
+  // Fixed: Allow empty string for note, only validate if it's provided and not empty
+  if (
+    note !== undefined &&
+    note !== null &&
+    typeof note === "string" &&
+    note.trim() &&
+    typeof note !== "string"
+  ) {
+    return res.status(400).json({ error: "invalid_note" });
+  }
+
+  // Only validate tax_year if it's provided
+  if (tax_year !== undefined && tax_year !== null) {
+    const year = Number(tax_year);
+    if (!Number.isInteger(year) || year < 1900 || year > 2100) {
+      return res.status(400).json({ error: "invalid_tax_year" });
+    }
+  }
+
+  // Validate slip_information if provided (should be array)
+  if (slip_information !== undefined && slip_information !== null) {
+    if (!Array.isArray(slip_information)) {
+      return res.status(400).json({ error: "slip_information_must_be_array" });
+    }
+  }
+
+  // Validate update_renewal if provided (should be a valid date string)
+  if (update_renewal !== undefined && update_renewal !== null) {
+    const renewalDate = new Date(update_renewal);
+    if (isNaN(renewalDate.getTime())) {
+      return res.status(400).json({ error: "invalid_update_renewal_date" });
+    }
   }
 
   const conn = await pool.connect();
   try {
     await conn.query("BEGIN");
 
-    /* ---------- verify business ---------- */
     const b = await conn.query(
       `SELECT id FROM business_clients WHERE id = $1`,
       [businessId]
@@ -847,25 +876,25 @@ async function createTaxRecord(req, res) {
       return res.status(404).json({ error: "business_not_found" });
     }
 
-    /* ---------- prevent duplicates ---------- */
+    // For duplicate check, handle null tax_year for ANNUAL_RENEWAL
+    const yearForCheck = tax_year ? Number(tax_year) : null;
+
     const dup = await conn.query(
       `
       SELECT id
       FROM business_tax_records
       WHERE business_id = $1
         AND tax_type = $2
-        AND tax_year = $3
+        AND ($3::smallint IS NULL OR tax_year = $3::smallint)
         AND ($4::text IS NULL OR tax_period = $4::text)
       `,
-      [businessId, tax_type, year, tax_period ?? null]
+      [businessId, tax_type, yearForCheck, tax_period ?? null]
     );
-
     if (dup.rows.length) {
       await conn.query("ROLLBACK");
       return res.status(409).json({ error: "duplicate_tax_record" });
     }
 
-    /* ---------- insert ---------- */
     const { rows } = await conn.query(
       `
       INSERT INTO business_tax_records (
@@ -879,17 +908,20 @@ async function createTaxRecord(req, res) {
         status,
         from_date,
         to_date,
+        prepared_by,
+        slip_information,
+        update_renewal,
         created_by,
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW())
       RETURNING *
       `,
       [
         businessId,
         tax_type,
-        year,
+        tax_year ? Number(tax_year) : null,
         tax_date ?? null,
         tax_period ?? null,
         amount ?? null,
@@ -897,21 +929,37 @@ async function createTaxRecord(req, res) {
         status ?? null,
         from_date ?? null,
         to_date ?? null,
-        created_by ?? req.user.id,
+        prepared_by ?? null,
+        slip_information ?? null,
+        update_renewal ?? null,
+        req.user.id,
       ]
     );
 
+    const taxRecord = rows[0];
+
+    // Only insert note if it exists and has content after trimming
+    if (note && typeof note === "string" && note.trim()) {
+      await conn.query(
+        `
+        INSERT INTO business_tax_notes
+        (business_tax_record_id, note_text, created_by)
+        VALUES ($1, $2, $3)
+        `,
+        [taxRecord.id, note.trim(), req.user.id]
+      );
+    }
+
     await conn.query("COMMIT");
-    res.status(201).json(rows[0]);
+    return res.status(201).json(taxRecord);
   } catch (err) {
     await conn.query("ROLLBACK");
     console.error("createBusinessTaxRecord:", err);
-    res.status(500).json({ error: "server_error" });
+    return res.status(500).json({ error: "server_error" });
   } finally {
     conn.release();
   }
 }
-
 async function patchTaxRecord(req, res) {
   const { businessId, taxRecordId } = req.params;
   const payload = req.body || {};

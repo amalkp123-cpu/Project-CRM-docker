@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 4;
 import { jwtDecode } from "jwt-decode";
 import styles from "./SignIn.module.css";
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 type ApiSuccess = {
   token: string;

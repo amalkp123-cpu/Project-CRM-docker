@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import styles from "./BusinessPatchModal.module.css";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 type TaxType = "HST" | "CORPORATION" | "PAYROLL" | "WSIB";
 

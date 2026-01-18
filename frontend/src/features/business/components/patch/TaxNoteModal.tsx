@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MdDelete, MdEdit, MdClose } from "react-icons/md";
 import styles from "./TaxNoteModal.module.css";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 function formatDateTime(ts?: string) {
   if (!ts) return "—";
